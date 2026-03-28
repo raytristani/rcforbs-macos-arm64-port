@@ -151,6 +151,10 @@ class AudioBridge {
         player.scheduleBuffer(buffer, completionHandler: nil)
     }
 
+    func setVolume(_ level: Float) {
+        audioEngine?.mainMixerNode.outputVolume = level
+    }
+
     func stop() {
         print("[AudioBridge] Stopped. Total RX packets decoded: \(rxPacketCount)")
         isActive = false

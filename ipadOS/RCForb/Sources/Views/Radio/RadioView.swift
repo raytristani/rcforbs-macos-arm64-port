@@ -57,6 +57,9 @@ struct RadioView: View {
             Slider(value: $volume, in: 0...1, step: 0.05)
                 .frame(width: 80)
                 .tint(Color.cream)
+                .onChange(of: volume) {
+                    cm.audioBridge.setVolume(Float(volume))
+                }
 
             Spacer()
 

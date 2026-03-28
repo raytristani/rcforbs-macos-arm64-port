@@ -17,63 +17,63 @@ RCForb Client connects to RCForb Server instances published on RemoteHams.com, g
 
 ## Platform Support
 
-| Platform | Status | Technology | Installer |
-|----------|--------|-----------|-----------|
-| macOS (Apple Silicon) | Available | Electron | `dist/macos/RCForb Client-1.0.0-arm64.dmg` |
-| macOS (Intel) | Planned | Electron | Build from source on Intel Mac |
-| Windows | Planned | Electron | Must be built on Windows (see `dist/windows/BUILD_INSTRUCTIONS.md`) |
-| iOS / iPadOS | Planned | Swift / SwiftUI | See `dist/ios/BUILD_INSTRUCTIONS.md` |
-| Android | Planned | Kotlin | See `dist/android/BUILD_INSTRUCTIONS.md` |
+| Platform | Status | Technology | Distribution |
+|----------|--------|-----------|--------------|
+| macOS (Apple Silicon) | Available | Swift / SwiftUI | ZIP archive in `dist/macos/` |
+| iPadOS | Developed, awaiting device testing | Swift / SwiftUI | Build from source |
 
-## Installers
+## Installation
 
-### macOS
+### macOS (Apple Silicon)
 
-Pre-built installers for Apple Silicon are in `dist/macos/`:
+Download the pre-built ZIP archive from `dist/macos/`:
 
-- **DMG** (recommended): `RCForb Client-1.0.0-arm64.dmg` - Mount and drag to Applications
-- **ZIP**: `RCForb Client-darwin-arm64-1.0.0.zip` - Extract and run directly
+- **`RCForb Client-1.0.3-arm64.zip`** - Extract and run directly
 
 > Note: The app is not code-signed or notarized. On first launch, right-click the app and select "Open" to bypass Gatekeeper, or go to System Settings > Privacy & Security to allow it.
 
-### Windows
+### iPadOS
 
-The Windows installer must be built on a Windows machine due to native dependencies. See `dist/windows/BUILD_INSTRUCTIONS.md` for instructions.
+The iPadOS app has been developed but is awaiting testing on a physical device. To build from source:
 
-### iOS / iPadOS / Android
-
-Mobile clients are planned but not yet implemented. The `ios/` and `android/` directories are scaffolding for future development.
+```bash
+cd ipadOS/RCForb
+swift build
+```
 
 ## Project Structure
 
 ```
 RCForb/
-  desktop/          Electron app (macOS + Windows)
-  android/          Android app (planned)
-  ios/              iOS/iPadOS Universal app (planned)
-  dist/             Pre-built installers
-    macos/          macOS DMG and ZIP
-    windows/        Windows installer (build instructions)
-    ios/            iOS/iPadOS IPA (build instructions)
-    android/        Android APK (build instructions)
-  docs/             Protocol specification and documentation
+  macOS/             macOS desktop app (Swift/SwiftUI)
+  ipadOS/            iPadOS app (Swift/SwiftUI)
+  dist/              Pre-built archives
+    macos/           macOS ZIP archive
+  docs/              Protocol specification and documentation
 ```
 
 ## Building from Source
 
-### Desktop (macOS)
+### macOS
 
 ```bash
-cd desktop
-npm install
-npm start          # Development mode
-npm run make       # Build macOS DMG + ZIP
+cd macOS/RCForb
+swift build        # Debug build
+swift run          # Run in development
+```
+
+### iPadOS
+
+```bash
+cd ipadOS/RCForb
+swift build
 ```
 
 ### Prerequisites
 
-- Node.js 18+
-- libspeex (`brew install speex` on macOS)
+- Swift 5.9+
+- macOS 14+ (Sonoma) or iPadOS 17+
+- libopus and libspeex are bundled with the app
 
 ## Protocol
 
