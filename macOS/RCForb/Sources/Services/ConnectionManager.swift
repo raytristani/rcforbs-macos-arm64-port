@@ -14,6 +14,7 @@ class ConnectionManager: ObservableObject {
     @Published var rotatorStateData: RotatorStateData?
     @Published var ampStateData: AmpStateData?
     @Published var switchStateData: SwitchStateData?
+    @Published var connectedStationName: String = ""
 
     /// User-overridden slider values. Once a user drags a slider, the value is
     /// stored here and server updates for that slider are ignored until Reset.
@@ -68,6 +69,7 @@ class ConnectionManager: ObservableObject {
 
     func connectToStation(_ station: RemoteStation) async {
         connectionState = .connecting
+        connectedStationName = station.serverName
         commandCount = 0
 
         let host = station.host
@@ -181,6 +183,7 @@ class ConnectionManager: ObservableObject {
         radioStateData = nil; serverInfoData = nil
         rotatorStateData = nil; ampStateData = nil; switchStateData = nil
         chatMessages = []
+        connectedStationName = ""
         connectionState = .authenticated
     }
 
