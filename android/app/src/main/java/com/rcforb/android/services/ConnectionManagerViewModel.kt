@@ -237,6 +237,11 @@ class ConnectionManagerViewModel : ViewModel() {
             tcpClient?.sendPTT(on)
             udpClient?.sendPTT(on)
         }
+        if (on) {
+            audioBridge.startTX()
+        } else {
+            audioBridge.stopTX()
+        }
     }
 
     fun clearError() {

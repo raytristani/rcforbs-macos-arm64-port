@@ -43,6 +43,7 @@ The chat sidebar lets you communicate with other operators connected to the same
 |----------|--------|-----------|--------------|
 | macOS (Apple Silicon) | Available | Swift / SwiftUI | ZIP archive in `dist/macos/` |
 | iPadOS | Developed, awaiting device testing | Swift / SwiftUI | Build from source |
+| Android | In development | Kotlin / Jetpack Compose | Build from source |
 
 ## Installation
 
@@ -50,7 +51,8 @@ The chat sidebar lets you communicate with other operators connected to the same
 
 Download the latest pre-built ZIP archive from `dist/macos/`:
 
-- **[RCForb Client-1.0.4-arm64-20260328-092834.zip](dist/macos/RCForb%20Client-1.0.4-arm64-20260328-092834.zip)** (latest)
+- **[RCForb Client-1.0.5-arm64-20260328-131948.zip](dist/macos/RCForb%20Client-1.0.5-arm64-20260328-131948.zip)** (latest)
+- `RCForb Client-1.0.4-arm64-20260328-092834.zip`
 - `RCForb Client-1.0.3-arm64.zip`
 
 > Note: The app is not code-signed or notarized. On first launch, right-click the app and select "Open" to bypass Gatekeeper, or go to System Settings > Privacy & Security to allow it.
@@ -64,12 +66,24 @@ cd ipadOS/RCForb
 swift build
 ```
 
+### Android
+
+The Android app is currently in development. To build from source:
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+Requires Android Studio or the Android SDK with API level 26+ (Android 8.0). The app uses Jetpack Compose for the UI and Android's MediaCodec for Opus audio encoding/decoding.
+
 ## Project Structure
 
 ```
 RCForb/
   macOS/             macOS desktop app (Swift/SwiftUI)
   ipadOS/            iPadOS app (Swift/SwiftUI)
+  android/           Android app (Kotlin/Jetpack Compose)
   dist/              Pre-built archives
     macos/           macOS ZIP archive
   docs/              Protocol specification and documentation
@@ -92,15 +106,43 @@ cd ipadOS/RCForb
 swift build
 ```
 
+### Android
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
 ### Prerequisites
 
-- Swift 5.9+
+- Swift 5.9+ (macOS/iPadOS)
 - macOS 14+ (Sonoma) or iPadOS 17+
-- libopus and libspeex are bundled with the app
+- Android SDK API 26+ and Kotlin 1.9+ (Android)
+- libopus and libspeex are bundled with the macOS app
 
 ## Protocol
 
 RCForb uses a custom protocol over UDP (V10, Opus audio) or TCP (V7, Speex audio) to communicate with RCForb Server instances. The full protocol specification is documented in `docs/PROTOCOL_SPECIFICATION.md`.
+
+## Changelog
+
+### v1.0.5 (2026-03-28)
+
+**Bug Fixes:**
+- **Fixed Push-to-Talk not transmitting audio** — PTT was sending the control byte to the server but never captured or encoded microphone audio. Added Opus encoder and mic capture to the audio bridge so pressing PTT now records from the microphone, encodes to Opus, and streams to the remote station. Fix applied to macOS, iPadOS, and Android.
+- Added `NSMicrophoneUsageDescription` to macOS Info.plist so the system prompts for mic permission on first PTT use.
+
+**New Features:**
+- Scrolling marquee display of the connected station name on the radio LCD (macOS and iPadOS).
+- Initial Android app scaffold with full networking, protocol, and UI implementation in Kotlin/Jetpack Compose.
+
+### v1.0.4 (2026-03-28)
+
+- Fixed volume slider on macOS and iPadOS.
+
+### v1.0.3
+
+- Initial release with macOS and iPadOS support.
 
 ## Author
 
