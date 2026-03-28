@@ -209,6 +209,11 @@ class ConnectionManager: ObservableObject {
     func sendPTT(_ on: Bool) {
         tcpClient?.sendPTT(on)
         udpClient?.sendPTT(on)
+        if on {
+            audioBridge.startTX()
+        } else {
+            audioBridge.stopTX()
+        }
     }
 
     // MARK: - Command Dispatch

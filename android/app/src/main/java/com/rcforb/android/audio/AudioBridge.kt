@@ -1,8 +1,11 @@
 package com.rcforb.android.audio
 
+import android.Manifest
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioRecord
 import android.media.AudioTrack
+import android.media.MediaRecorder
 import android.util.Log
 import kotlinx.coroutines.*
 import java.nio.ByteBuffer
@@ -19,7 +22,14 @@ class AudioBridge {
     private val sampleRate = 48000
 
     private var opusDecoder: OpusDecoder? = null
+    private var opusEncoder: OpusEncoder? = null
     private var speexDecoder: SpeexDecoder? = null
+
+    // TX state
+    private var isTXActive = false
+    private var audioRecord: AudioRecord? = null
+    private var txJob: Job? = null
+    private val txFrameSize = 960 // 20ms at 48kHz
 
     private val pendingPcm = mutableListOf<ByteArray>()
     private val batchFrames = 4
@@ -37,10 +47,12 @@ class AudioBridge {
 
         if (codec == CodecType.OPUS) {
             opusDecoder = OpusDecoder()
+            opusEncoder = OpusEncoder()
             speexDecoder = null
         } else {
             speexDecoder = SpeexDecoder()
             opusDecoder = null
+            opusEncoder = null
         }
 
         setupAudioTrack()
@@ -129,12 +141,66 @@ class AudioBridge {
         audioTrack?.write(merged, 0, merged.size)
     }
 
+    @android.annotation.SuppressLint("MissingPermission")
+    fun startTX() {
+        if (!isActive || isTXActive) return
+        isTXActive = true
+
+        val bufSize = AudioRecord.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+
+        try {
+            audioRecord = AudioRecord(
+                MediaRecorder.AudioSource.MIC,
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufSize.coerceAtLeast(txFrameSize * 2 * 4)
+            )
+            audioRecord?.startRecording()
+            Log.i("AudioBridge", "TX started — mic recording")
+
+            txJob = audioScope.launch {
+                val buffer = ByteArray(txFrameSize * 2) // Int16 = 2 bytes per sample
+                while (isTXActive) {
+                    val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
+                    if (read == buffer.size) {
+                        val encoded = opusEncoder?.encode(buffer)
+                        if (encoded != null) {
+                            onEncodedAudio?.invoke(encoded)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("AudioBridge", "Failed to start TX: ${e.message}")
+            isTXActive = false
+        }
+    }
+
+    fun stopTX() {
+        if (!isTXActive) return
+        isTXActive = false
+        txJob?.cancel()
+        txJob = null
+        try {
+            audioRecord?.stop()
+            audioRecord?.release()
+        } catch (_: Exception) {}
+        audioRecord = null
+        Log.i("AudioBridge", "TX stopped")
+    }
+
     fun setVolume(level: Float) {
         audioTrack?.setVolume(level)
     }
 
     fun stop() {
         Log.i("AudioBridge", "Stopped. Total RX packets decoded: $rxPacketCount")
+        stopTX()
         isActive = false
         batchJob?.cancel()
         batchJob = null
@@ -142,6 +208,8 @@ class AudioBridge {
         audioTrack?.release()
         audioTrack = null
         opusDecoder = null
+        opusEncoder?.release()
+        opusEncoder = null
         speexDecoder = null
         onEncodedAudio = null
         rxPacketCount = 0

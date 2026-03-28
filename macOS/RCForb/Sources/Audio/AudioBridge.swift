@@ -19,10 +19,16 @@ class AudioBridge {
     private let sampleRate: Double = 48000
     private let format: AVAudioFormat
 
-    // Opus decoder
+    // Opus decoder/encoder
     private var opusDecoder: OpusDecoder?
+    private var opusEncoder: OpusEncoder?
     // Speex decoder
     private var speexDecoder: SpeexDecoder?
+
+    // TX state
+    private var isTXActive = false
+    private let txFrameSize = 960 // 20ms at 48kHz mono
+    private var txPcmBuffer = Data()
 
     // Batching
     private var pendingPcm: [Data] = []
@@ -48,10 +54,12 @@ class AudioBridge {
 
         if codecType == .opus {
             opusDecoder = OpusDecoder()
+            opusEncoder = OpusEncoder()
             speexDecoder = nil
         } else {
             speexDecoder = SpeexDecoder()
             opusDecoder = nil
+            opusEncoder = nil
         }
 
         setupAudioEngine()
@@ -142,12 +150,95 @@ class AudioBridge {
         player.scheduleBuffer(buffer, completionHandler: nil)
     }
 
+    func startTX() {
+        guard isActive, !isTXActive, let audioEngine else { return }
+        isTXActive = true
+        txPcmBuffer = Data()
+
+        let inputNode = audioEngine.inputNode
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+        let desiredFormat = format // 48kHz mono
+
+        print("[AudioBridge] TX started — mic format: \(inputFormat), target: \(desiredFormat)")
+
+        inputNode.installTap(onBus: 0, bufferSize: AVAudioFrameCount(txFrameSize), format: inputFormat) { [weak self] buffer, _ in
+            guard let self, self.isTXActive else { return }
+
+            // Convert to 48kHz mono Int16 PCM
+            guard let convertedBuffer = self.convertToMono48k(buffer, from: inputFormat) else { return }
+
+            let frameLength = Int(convertedBuffer.frameLength)
+            guard frameLength > 0, let floatData = convertedBuffer.floatChannelData?[0] else { return }
+
+            // Float32 -> Int16
+            var int16Data = Data(count: frameLength * 2)
+            int16Data.withUnsafeMutableBytes { raw in
+                let ptr = raw.bindMemory(to: Int16.self)
+                for i in 0..<frameLength {
+                    ptr[i] = Int16(clamping: Int(floatData[i] * 32767.0))
+                }
+            }
+
+            self.audioQueue.async {
+                self.txPcmBuffer.append(int16Data)
+                self.drainTXBuffer()
+            }
+        }
+    }
+
+    func stopTX() {
+        guard isTXActive else { return }
+        isTXActive = false
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        txPcmBuffer = Data()
+        print("[AudioBridge] TX stopped")
+    }
+
+    private func drainTXBuffer() {
+        let bytesPerFrame = txFrameSize * 2 // Int16 = 2 bytes per sample
+        while txPcmBuffer.count >= bytesPerFrame {
+            let frameData = txPcmBuffer.prefix(bytesPerFrame)
+            txPcmBuffer = Data(txPcmBuffer.dropFirst(bytesPerFrame))
+
+            if let encoded = opusEncoder?.encode(frameData) {
+                onEncodedAudio?(encoded)
+            }
+        }
+    }
+
+    private func convertToMono48k(_ buffer: AVAudioPCMBuffer, from inputFormat: AVAudioFormat) -> AVAudioPCMBuffer? {
+        guard inputFormat.sampleRate != sampleRate || inputFormat.channelCount != 1 else {
+            return buffer
+        }
+
+        guard let converter = AVAudioConverter(from: inputFormat, to: format) else { return nil }
+
+        let ratio = sampleRate / inputFormat.sampleRate
+        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1
+        guard let converted = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return nil }
+
+        var error: NSError?
+        var isDone = false
+        converter.convert(to: converted, error: &error) { _, outStatus in
+            if isDone {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+            isDone = true
+            outStatus.pointee = .haveData
+            return buffer
+        }
+
+        return error == nil ? converted : nil
+    }
+
     func setVolume(_ level: Float) {
         audioEngine?.mainMixerNode.outputVolume = level
     }
 
     func stop() {
         print("[AudioBridge] Stopped. Total RX packets decoded: \(rxPacketCount)")
+        stopTX()
         isActive = false
         batchTimer?.cancel()
         batchTimer = nil
@@ -156,6 +247,7 @@ class AudioBridge {
         audioEngine = nil
         playerNode = nil
         opusDecoder = nil
+        opusEncoder = nil
         speexDecoder = nil
         onEncodedAudio = nil
         rxPacketCount = 0
