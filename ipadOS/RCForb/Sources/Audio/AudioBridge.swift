@@ -6,31 +6,37 @@ enum CodecType {
     case speex
 }
 
-/// Audio bridge ported from audio-bridge.ts
-/// Decodes network audio and plays via AVAudioEngine.
+/// Audio bridge: decodes network audio for playback, captures mic audio for TX.
+/// Uses separate AVAudioEngines for playback and mic to avoid disrupting RX during TX.
 class AudioBridge {
     private var codecType: CodecType = .opus
     private var isActive = false
     private var rxPacketCount = 0
 
-    // Audio engine for playback
+    // Audio engine for playback (never stopped during TX)
     private var audioEngine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
+    // Separate engine for mic capture (created/destroyed per TX session)
+    private var micEngine: AVAudioEngine?
+    private var txConverter: AVAudioConverter?
+    private var savedVolume: Float = 1.0
     private let sampleRate: Double = 48000
     private let format: AVAudioFormat
 
     // Opus decoder/encoder
     private var opusDecoder: OpusDecoder?
     private var opusEncoder: OpusEncoder?
-    // Speex decoder
+    // Speex decoder/encoder
     private var speexDecoder: SpeexDecoder?
+    private var speexEncoder: SpeexEncoder?
 
     // TX state
     private var isTXActive = false
-    private let txFrameSize = 960 // 20ms at 48kHz
     private var txPcmBuffer = Data()
+    /// Frame size in samples for the active TX codec
+    private var txFrameSize: Int { codecType == .speex ? 160 : 960 }
 
-    // Batching
+    // RX batching
     private var pendingPcm: [Data] = []
     private var pendingBytes = 0
     private var batchTimer: DispatchSourceTimer?
@@ -56,14 +62,15 @@ class AudioBridge {
             opusDecoder = OpusDecoder()
             opusEncoder = OpusEncoder()
             speexDecoder = nil
+            speexEncoder = nil
         } else {
             speexDecoder = SpeexDecoder()
+            speexEncoder = SpeexEncoder()
             opusDecoder = nil
             opusEncoder = nil
         }
 
         setupAudioEngine()
-        print("[AudioBridge] Started with \(codecType) codec")
     }
 
     private func setupAudioEngine() {
@@ -102,11 +109,7 @@ class AudioBridge {
         }
 
         guard let pcm, !pcm.isEmpty else { return }
-
         rxPacketCount += 1
-        if rxPacketCount <= 3 {
-            print("[AudioBridge] RX packet #\(rxPacketCount): \(data.count) encoded -> \(pcm.count) PCM bytes")
-        }
 
         let outputPcm: Data
         if codecType == .speex {
@@ -143,7 +146,6 @@ class AudioBridge {
         pendingPcm = []
         pendingBytes = 0
 
-        // Convert Int16 PCM to Float32 for AVAudioPCMBuffer
         let sampleCount = merged.count / 2
         guard sampleCount > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleCount)) else { return }
         buffer.frameLength = AVAudioFrameCount(sampleCount)
@@ -160,19 +162,56 @@ class AudioBridge {
     }
 
     func startTX() {
-        guard isActive, !isTXActive, let audioEngine else { return }
+        guard isActive, !isTXActive else { return }
         isTXActive = true
         txPcmBuffer = Data()
 
-        let inputNode = audioEngine.inputNode
+        // Check mic permission
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+            if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
+                AVCaptureDevice.requestAccess(for: .audio) { _ in }
+            }
+            isTXActive = false
+            return
+        }
+
+        // Create a separate engine for mic capture — never touch the playback engine
+        let mic = AVAudioEngine()
+        micEngine = mic
+
+        let inputNode = mic.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
+        let txTargetRate: Double = codecType == .speex ? 8000 : sampleRate
+        let txTargetFormat = AVAudioFormat(standardFormatWithSampleRate: txTargetRate, channels: 1)!
 
-        print("[AudioBridge] TX started — mic format: \(inputFormat)")
+        // Create converter once for the session to avoid per-callback overhead
+        if inputFormat.sampleRate != txTargetRate || inputFormat.channelCount != 1 {
+            txConverter = AVAudioConverter(from: inputFormat, to: txTargetFormat)
+        } else {
+            txConverter = nil
+        }
 
-        inputNode.installTap(onBus: 0, bufferSize: AVAudioFrameCount(txFrameSize), format: inputFormat) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: AVAudioFrameCount(480), format: inputFormat) { [weak self] buffer, _ in
             guard let self, self.isTXActive else { return }
 
-            guard let convertedBuffer = self.convertToMono48k(buffer, from: inputFormat) else { return }
+            let convertedBuffer: AVAudioPCMBuffer?
+            if let converter = self.txConverter {
+                let ratio = txTargetRate / inputFormat.sampleRate
+                let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1
+                guard let output = AVAudioPCMBuffer(pcmFormat: txTargetFormat, frameCapacity: capacity) else { return }
+                var isDone = false
+                converter.convert(to: output, error: nil) { _, outStatus in
+                    if isDone { outStatus.pointee = .noDataNow; return nil }
+                    isDone = true
+                    outStatus.pointee = .haveData
+                    return buffer
+                }
+                convertedBuffer = output
+            } else {
+                convertedBuffer = buffer
+            }
+
+            guard let convertedBuffer else { return }
 
             let frameLength = Int(convertedBuffer.frameLength)
             guard frameLength > 0, let floatData = convertedBuffer.floatChannelData?[0] else { return }
@@ -190,14 +229,29 @@ class AudioBridge {
                 self.drainTXBuffer()
             }
         }
+
+        // Duck RX audio during TX to prevent feedback into the mic
+        savedVolume = audioEngine?.mainMixerNode.outputVolume ?? 1.0
+        audioEngine?.mainMixerNode.outputVolume = 0.05
+
+        do {
+            try mic.start()
+        } catch {
+            print("[AudioBridge] Failed to start mic engine: \(error)")
+        }
     }
 
     func stopTX() {
         guard isTXActive else { return }
         isTXActive = false
-        audioEngine?.inputNode.removeTap(onBus: 0)
+        micEngine?.inputNode.removeTap(onBus: 0)
+        micEngine?.stop()
+        micEngine = nil
+        txConverter = nil
         txPcmBuffer = Data()
-        print("[AudioBridge] TX stopped")
+
+        // Restore RX volume
+        audioEngine?.mainMixerNode.outputVolume = savedVolume
     }
 
     private func drainTXBuffer() {
@@ -206,36 +260,17 @@ class AudioBridge {
             let frameData = txPcmBuffer.prefix(bytesPerFrame)
             txPcmBuffer = Data(txPcmBuffer.dropFirst(bytesPerFrame))
 
-            if let encoded = opusEncoder?.encode(frameData) {
-                onEncodedAudio?(encoded)
+            let encoded: Data?
+            if codecType == .opus {
+                encoded = opusEncoder?.encode(frameData)
+            } else {
+                encoded = speexEncoder?.encode(frameData)
+            }
+
+            if let encoded, let callback = onEncodedAudio {
+                callback(encoded)
             }
         }
-    }
-
-    private func convertToMono48k(_ buffer: AVAudioPCMBuffer, from inputFormat: AVAudioFormat) -> AVAudioPCMBuffer? {
-        guard inputFormat.sampleRate != sampleRate || inputFormat.channelCount != 1 else {
-            return buffer
-        }
-
-        guard let converter = AVAudioConverter(from: inputFormat, to: format) else { return nil }
-
-        let ratio = sampleRate / inputFormat.sampleRate
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1
-        guard let converted = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return nil }
-
-        var error: NSError?
-        var isDone = false
-        converter.convert(to: converted, error: &error) { _, outStatus in
-            if isDone {
-                outStatus.pointee = .noDataNow
-                return nil
-            }
-            isDone = true
-            outStatus.pointee = .haveData
-            return buffer
-        }
-
-        return error == nil ? converted : nil
     }
 
     func setVolume(_ level: Float) {
@@ -243,7 +278,6 @@ class AudioBridge {
     }
 
     func stop() {
-        print("[AudioBridge] Stopped. Total RX packets decoded: \(rxPacketCount)")
         stopTX()
         isActive = false
         batchTimer?.cancel()
@@ -255,6 +289,7 @@ class AudioBridge {
         opusDecoder = nil
         opusEncoder = nil
         speexDecoder = nil
+        speexEncoder = nil
         onEncodedAudio = nil
         rxPacketCount = 0
         pendingPcm = []

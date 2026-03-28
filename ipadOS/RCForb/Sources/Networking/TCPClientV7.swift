@@ -120,18 +120,32 @@ class TCPClientV7 {
     }
 
     func sendPTT(_ on: Bool) {
-        sendRawCmd(Data([on ? ControlByte.PTT : ControlByte.PTT_OFF]))
+        // V7 TCP: Send PTT as a framed string on the audio channel, matching
+        // the C# SendDataPacket("PTT") format:
+        //   bytes 0-3: payload length (int32 LE)
+        //   byte 4: type (1 = control for PTT, 2 = audio/data for everything else)
+        //   bytes 5-9: padding zeros
+        //   bytes 10+: ASCII payload
+        guard audioConnection != nil else { return }
+        if on {
+            let payload = "PTT".data(using: .ascii)!
+            var packet = Data(count: 10 + payload.count)
+            var len = Int32(payload.count).littleEndian
+            withUnsafeBytes(of: &len) { packet.replaceSubrange(0..<4, with: $0) }
+            packet[4] = 1 // type = control (specifically for PTT)
+            packet.replaceSubrange(10..<(10 + payload.count), with: payload)
+            audioConnection?.send(content: packet, completion: .contentProcessed { _ in })
+        }
+        // PTT OFF: no explicit packet needed — server detects absence of audio
     }
 
     func sendAudio(_ data: Data) {
         guard audioConnection != nil else { return }
         var header = Data(count: 10)
         var len = Int32(data.count).littleEndian
-        var zero32 = Int32(0).littleEndian
-        var zero16 = Int16(0).littleEndian
         withUnsafeBytes(of: &len) { header.replaceSubrange(0..<4, with: $0) }
-        withUnsafeBytes(of: &zero32) { header.replaceSubrange(4..<8, with: $0) }
-        withUnsafeBytes(of: &zero16) { header.replaceSubrange(8..<10, with: $0) }
+        header[4] = 2 // packet type = audio/data (must be 2, matching C# SendAudioPacket)
+        // bytes 5-9 remain zero (padding)
         audioConnection?.send(content: header + data, completion: .contentProcessed { _ in })
     }
 

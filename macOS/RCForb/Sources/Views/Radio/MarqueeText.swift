@@ -1,19 +1,21 @@
 import SwiftUI
 
-/// A single-line text view that scrolls horizontally (marquee / stock-ticker
-/// style) when the text is too wide to fit its container.
+/// A single-line text view that scrolls back and forth (stock-ticker style)
+/// when the text is too wide to fit its container.
 struct MarqueeText: View {
     let text: String
     let font: Font
     let color: Color
 
+    /// Points scrolled per second
+    private let scrollSpeed: Double = 30.0
+    /// Pause in seconds at each end
+    private let pauseDuration: Double = 1.5
+
     @State private var textWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
-    @State private var offset: CGFloat = 0
-    @State private var animating = false
-
-    /// Duration in seconds per point of overflow, controls scroll speed.
-    private let speed: Double = 0.04
+    @State private var startTime: Date = .now
+    @State private var measured = false
 
     private var overflow: CGFloat {
         max(textWidth - containerWidth, 0)
@@ -21,63 +23,60 @@ struct MarqueeText: View {
 
     var body: some View {
         GeometryReader { geo in
-            Text(text)
-                .font(font)
-                .foregroundColor(color)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .background(
-                    GeometryReader { textGeo in
-                        Color.clear
-                            .onAppear {
-                                textWidth = textGeo.size.width
-                                containerWidth = geo.size.width
-                                startAnimationIfNeeded()
-                            }
-                            .onChange(of: text) {
-                                // Re-measure after text changes
-                                textWidth = textGeo.size.width
-                                containerWidth = geo.size.width
-                                resetAnimation()
-                            }
-                    }
-                )
-                .offset(x: offset)
+            let _ = updateContainer(geo.size.width)
+            TimelineView(.animation(paused: overflow <= 0 || !measured)) { timeline in
+                Text(text)
+                    .font(font)
+                    .foregroundColor(color)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .background(
+                        GeometryReader { textGeo in
+                            Color.clear
+                                .onAppear { measureText(textGeo.size.width, container: geo.size.width) }
+                                .onChange(of: text) { measureText(textGeo.size.width, container: geo.size.width) }
+                        }
+                    )
+                    .offset(x: currentOffset(at: timeline.date))
+            }
         }
         .clipped()
     }
 
-    private func startAnimationIfNeeded() {
-        guard overflow > 0, !animating else { return }
-        animating = true
-        scrollLeft()
-    }
-
-    private func resetAnimation() {
-        animating = false
-        offset = 0
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            startAnimationIfNeeded()
+    private func updateContainer(_ width: CGFloat) {
+        if containerWidth != width {
+            DispatchQueue.main.async { containerWidth = width }
         }
     }
 
-    private func scrollLeft() {
-        guard animating else { return }
-        withAnimation(.linear(duration: speed * Double(overflow))) {
-            offset = -overflow
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + speed * Double(overflow) + 1.0) {
-            scrollRight()
-        }
+    private func measureText(_ tw: CGFloat, container cw: CGFloat) {
+        textWidth = tw
+        containerWidth = cw
+        startTime = .now
+        measured = true
     }
 
-    private func scrollRight() {
-        guard animating else { return }
-        withAnimation(.linear(duration: speed * Double(overflow))) {
-            offset = 0
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + speed * Double(overflow) + 1.0) {
-            scrollLeft()
+    private func currentOffset(at date: Date) -> CGFloat {
+        guard overflow > 0 else { return 0 }
+
+        let scrollDuration = Double(overflow) / scrollSpeed
+        let cycleDuration = pauseDuration + scrollDuration + pauseDuration + scrollDuration
+        let elapsed = date.timeIntervalSince(startTime).truncatingRemainder(dividingBy: cycleDuration)
+
+        if elapsed < pauseDuration {
+            // Paused at start
+            return 0
+        } else if elapsed < pauseDuration + scrollDuration {
+            // Scrolling left
+            let progress = (elapsed - pauseDuration) / scrollDuration
+            return -overflow * CGFloat(progress)
+        } else if elapsed < pauseDuration + scrollDuration + pauseDuration {
+            // Paused at end
+            return -overflow
+        } else {
+            // Scrolling right
+            let progress = (elapsed - pauseDuration - scrollDuration - pauseDuration) / scrollDuration
+            return -overflow * CGFloat(1.0 - progress)
         }
     }
 }
