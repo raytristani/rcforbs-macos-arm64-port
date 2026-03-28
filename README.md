@@ -26,9 +26,10 @@ RCForb Client connects to RCForb Server instances published on RemoteHams.com, g
 
 ### macOS (Apple Silicon)
 
-Download the pre-built ZIP archive from `dist/macos/`:
+Download the latest pre-built ZIP archive from `dist/macos/`:
 
-- **`RCForb Client-1.0.3-arm64.zip`** - Extract and run directly
+- **[RCForb Client-1.0.4-arm64-20260328-092834.zip](dist/macos/RCForb%20Client-1.0.4-arm64-20260328-092834.zip)** (latest)
+- `RCForb Client-1.0.3-arm64.zip`
 
 > Note: The app is not code-signed or notarized. On first launch, right-click the app and select "Open" to bypass Gatekeeper, or go to System Settings > Privacy & Security to allow it.
 
