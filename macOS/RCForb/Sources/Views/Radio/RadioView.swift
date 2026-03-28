@@ -170,6 +170,17 @@ struct RadioView: View {
                     .opacity(0.6)
                     .padding(.bottom, 2)
                 }
+                if !cm.connectedStationName.isEmpty {
+                    MarqueeText(
+                        text: cm.connectedStationName,
+                        font: .custom(FontRegistration.digital7Mono, size: 24),
+                        color: Color(hex: "#553300")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 28)
+                    .padding(.leading, 24)
+                    .padding(.bottom, 2)
+                }
             }
             .padding(.top, 4)
 
