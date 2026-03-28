@@ -93,6 +93,19 @@ class TCPClientV7(private val voipPort: Int) {
 
     fun sendPTT(on: Boolean) {
         sendRawCmd(byteArrayOf(if (on) ControlByte.PTT else ControlByte.PTT_OFF))
+        if (on) {
+            // Send "PTT" string on audio channel with type=1 header (matches C# SendDataPacket)
+            val out = audioOut ?: return
+            try {
+                val pttBytes = "PTT".toByteArray(Charsets.US_ASCII)
+                val header = ByteBuffer.allocate(10).order(ByteOrder.LITTLE_ENDIAN)
+                header.putInt(pttBytes.size)
+                header.put(1) // type=1 for PTT
+                header.put(ByteArray(5))
+                out.write(header.array())
+                out.write(pttBytes)
+            } catch (_: Exception) {}
+        }
     }
 
     fun sendAudio(data: ByteArray) {
@@ -100,8 +113,8 @@ class TCPClientV7(private val voipPort: Int) {
         try {
             val header = ByteBuffer.allocate(10).order(ByteOrder.LITTLE_ENDIAN)
             header.putInt(data.size)
-            header.putInt(0)
-            header.putShort(0)
+            header.put(2) // type=2 for audio/data
+            header.put(ByteArray(5))
             out.write(header.array())
             out.write(data)
         } catch (_: Exception) {}

@@ -51,7 +51,8 @@ The chat sidebar lets you communicate with other operators connected to the same
 
 Download the latest pre-built ZIP archive from `dist/macos/`:
 
-- **[RCForb Client-1.0.5-arm64-20260328-131948.zip](dist/macos/RCForb%20Client-1.0.5-arm64-20260328-131948.zip)** (latest)
+- **[RCForb Client-1.0.6-arm64-20260328-160200.zip](dist/macos/RCForb%20Client-1.0.6-arm64-20260328-160200.zip)** (latest)
+- `RCForb Client-1.0.5-arm64-20260328-131948.zip`
 - `RCForb Client-1.0.4-arm64-20260328-092834.zip`
 - `RCForb Client-1.0.3-arm64.zip`
 
@@ -120,17 +121,46 @@ cd android
 - Android SDK API 26+ and Kotlin 1.9+ (Android)
 - libopus and libspeex are bundled with the macOS app
 
+## Test Stations
+
+Public stations with TX enabled that can be used for testing PTT and audio:
+
+| Station | Radio | Notes |
+|---------|-------|-------|
+| LARC | IC-7300 | London Amateur Radio Club, public |
+| SV1BMQ | IC-7300 | Public, Greece |
+| HR5HAC | Kenwood TS-50 | Public, Honduras |
+| ZL1HN | IC-7100 | Public, New Zealand |
+| ZS6WDL | IC-7300 | Public, South Africa |
+| W6JFA | IC-7610 | Public, EFHW antenna |
+| KE6GG | IC-7300 | Public |
+| K6BJ DeLa | TS-570 | Public, Santa Cruz CA |
+
+> Note: Most stations require you to request tune permission before transmitting. Type "May I tune the remote?" in the chat window and wait for approval. Some stations may require owner approval which can take time.
+
 ## Protocol
 
 RCForb uses a custom protocol over UDP (V10, Opus audio) or TCP (V7, Speex audio) to communicate with RCForb Server instances. The full protocol specification is documented in `docs/PROTOCOL_SPECIFICATION.md`.
 
 ## Changelog
 
+### v1.0.6 (2026-03-28)
+
+**Bug Fixes:**
+- **Fixed Push-to-Talk end-to-end** — Complete PTT rewrite for V7 TCP stations:
+  - PTT now keys the radio's TX button via command channel (`radio::button::TX::1`), matching the C# client's `GetTXButton()`/`SetButton()` flow.
+  - V7 TCP no longer sends raw PTT control bytes on the command channel (which crashed the connection).
+  - Audio packets now use correct header type byte (0x02 = audio/data), matching the C# `SendAudioPacket` format.
+  - Added Speex encoder for TX audio on V7/TCP stations (8kHz narrowband, quality 8).
+  - Mic capture uses a separate `AVAudioEngine` to avoid disrupting RX playback.
+  - RX volume is ducked to 5% during TX to prevent feedback, restored on release.
+  - Reusable `AVAudioConverter` created once per TX session for cleaner sample rate conversion.
+- **Fixed marquee ticker animation** — Rewrote `MarqueeText` using `TimelineView` for reliable back-and-forth scrolling on macOS and iPadOS.
+
 ### v1.0.5 (2026-03-28)
 
 **Bug Fixes:**
-- **Fixed Push-to-Talk not transmitting audio** — PTT was sending the control byte to the server but never captured or encoded microphone audio. Added Opus encoder and mic capture to the audio bridge so pressing PTT now records from the microphone, encodes to Opus, and streams to the remote station. Fix applied to macOS, iPadOS, and Android.
-- Added `NSMicrophoneUsageDescription` to macOS Info.plist so the system prompts for mic permission on first PTT use.
+- **Added Opus encoder and mic capture** for initial PTT support. Added `NSMicrophoneUsageDescription` to macOS Info.plist.
 
 **New Features:**
 - Scrolling marquee display of the connected station name on the radio LCD (macOS and iPadOS).

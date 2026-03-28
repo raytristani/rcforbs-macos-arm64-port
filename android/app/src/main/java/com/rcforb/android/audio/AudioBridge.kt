@@ -24,9 +24,11 @@ class AudioBridge {
     private var opusDecoder: OpusDecoder? = null
     private var opusEncoder: OpusEncoder? = null
     private var speexDecoder: SpeexDecoder? = null
+    private var speexEncoder: SpeexEncoder? = null
 
-    // TX state
+    // TX state / volume ducking
     private var isTXActive = false
+    private var savedVolume: Float = 1.0f
     private var audioRecord: AudioRecord? = null
     private var txJob: Job? = null
     private val txFrameSize = 960 // 20ms at 48kHz
@@ -49,8 +51,10 @@ class AudioBridge {
             opusDecoder = OpusDecoder()
             opusEncoder = OpusEncoder()
             speexDecoder = null
+            speexEncoder = null
         } else {
             speexDecoder = SpeexDecoder()
+            speexEncoder = SpeexEncoder()
             opusDecoder = null
             opusEncoder = null
         }
@@ -146,6 +150,10 @@ class AudioBridge {
         if (!isActive || isTXActive) return
         isTXActive = true
 
+        // Volume ducking — save current volume and reduce to near-silent
+        savedVolume = audioTrack?.let { 1.0f } ?: 1.0f
+        audioTrack?.setVolume(0.05f)
+
         val bufSize = AudioRecord.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_IN_MONO,
@@ -161,14 +169,17 @@ class AudioBridge {
                 bufSize.coerceAtLeast(txFrameSize * 2 * 4)
             )
             audioRecord?.startRecording()
-            Log.i("AudioBridge", "TX started — mic recording")
 
             txJob = audioScope.launch {
                 val buffer = ByteArray(txFrameSize * 2) // Int16 = 2 bytes per sample
                 while (isTXActive) {
                     val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
                     if (read == buffer.size) {
-                        val encoded = opusEncoder?.encode(buffer)
+                        val encoded = if (codecType == CodecType.OPUS) {
+                            opusEncoder?.encode(buffer)
+                        } else {
+                            speexEncoder?.encode(buffer)
+                        }
                         if (encoded != null) {
                             onEncodedAudio?.invoke(encoded)
                         }
@@ -178,6 +189,7 @@ class AudioBridge {
         } catch (e: Exception) {
             Log.e("AudioBridge", "Failed to start TX: ${e.message}")
             isTXActive = false
+            audioTrack?.setVolume(savedVolume)
         }
     }
 
@@ -191,7 +203,9 @@ class AudioBridge {
             audioRecord?.release()
         } catch (_: Exception) {}
         audioRecord = null
-        Log.i("AudioBridge", "TX stopped")
+
+        // Restore volume after TX
+        audioTrack?.setVolume(savedVolume)
     }
 
     fun setVolume(level: Float) {
@@ -211,6 +225,8 @@ class AudioBridge {
         opusEncoder?.release()
         opusEncoder = null
         speexDecoder = null
+        speexEncoder?.release()
+        speexEncoder = null
         onEncodedAudio = null
         rxPacketCount = 0
         pendingPcm.clear()

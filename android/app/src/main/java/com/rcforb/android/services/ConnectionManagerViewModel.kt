@@ -232,7 +232,18 @@ class ConnectionManagerViewModel : ViewModel() {
         }
     }
 
+    private fun getTXButton(): String? {
+        val buttons = _radioStateData.value?.buttons ?: return null
+        if ("TXd" in buttons) return "TXd"
+        if ("TX" in buttons) return "TX"
+        return null
+    }
+
     fun sendPTT(on: Boolean) {
+        val txButton = getTXButton()
+        if (txButton != null) {
+            sendCommand(CommandParser.setButton(txButton, if (on) "1" else "0"))
+        }
         viewModelScope.launch(Dispatchers.IO) {
             tcpClient?.sendPTT(on)
             udpClient?.sendPTT(on)

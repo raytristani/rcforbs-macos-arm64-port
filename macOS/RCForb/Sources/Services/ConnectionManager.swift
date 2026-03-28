@@ -196,9 +196,6 @@ class ConnectionManager: ObservableObject {
     // MARK: - Send Commands
 
     func sendCommand(_ command: String) {
-        if command.contains("frequency") {
-            print("[SendCommand] \(command)")
-        }
         if let tcp = tcpClient {
             tcp.sendCommandString(command)
         } else if let udp = udpClient {
@@ -207,6 +204,10 @@ class ConnectionManager: ObservableObject {
     }
 
     func sendPTT(_ on: Bool) {
+        // Key the radio's TX button (TXd or TX, whichever exists)
+        if let txButton = getTXButton() {
+            sendCommand(CommandParser.setButton(txButton, on ? "1" : "0"))
+        }
         tcpClient?.sendPTT(on)
         udpClient?.sendPTT(on)
         if on {
@@ -216,14 +217,18 @@ class ConnectionManager: ObservableObject {
         }
     }
 
+    /// Find the TX button name from the radio's button list, matching C# GetTXButton()
+    private func getTXButton() -> String? {
+        let buttons = radioState.buttonOrder
+        if buttons.contains("TXd") { return "TXd" }
+        if buttons.contains("TX") { return "TX" }
+        return nil
+    }
+
     // MARK: - Command Dispatch
 
     private func dispatchCommand(_ command: String) {
         commandCount += 1
-        if commandCount <= 30 {
-            let preview = String(command.prefix(120))
-            print("[Dispatch] #\(commandCount): \(preview)")
-        }
 
         let radioCommand = translateV7Command(command)
 
