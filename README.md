@@ -15,6 +15,28 @@ RCForb Client connects to RCForb Server instances published on RemoteHams.com, g
 - **Chat** with other operators connected to the same station
 - **Rotator, amplifier, and antenna switch control** (when available on the remote station)
 
+## Screenshots
+
+### Login
+Sign in with your RemoteHams.com credentials. Touch ID is supported on compatible Macs for quick access.
+
+![Login screen](docs/images/login-screen.png)
+
+### Station Lobby
+Browse available remote stations worldwide. Each listing shows the radio model, location, grid square, protocol version, and connection type.
+
+![Station lobby](docs/images/station-lobby.png)
+
+### Radio Control Panel
+Full radio control interface with VFO A/B tuning knobs, frequency display, S-meter, mode and filter selection, button controls, adjustment sliders, status readouts, and Push-to-Talk.
+
+![Radio control panel](docs/images/radio-control-panel.png)
+
+### Radio Control with Chat
+The chat sidebar lets you communicate with other operators connected to the same station in real time.
+
+![Radio control with chat sidebar](docs/images/radio-control-with-chat.png)
+
 ## Platform Support
 
 | Platform | Status | Technology | Distribution |
