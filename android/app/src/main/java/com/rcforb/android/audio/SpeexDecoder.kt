@@ -1,33 +1,33 @@
 package com.rcforb.android.audio
 
 import android.util.Log
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
- * Speex narrowband decoder.
- * On Android, we use a minimal pure-Java Speex decoder implementation.
+ * Speex narrowband decoder using native libspeex via JNI.
  * Parameters: 8kHz narrowband, 160 samples/frame (20ms).
- * Falls back to silence if decoding fails.
- *
- * NOTE: For a production build, integrate libspeex via JNI.
- * This stub produces silence frames to maintain audio timing.
  */
 class SpeexDecoder {
-    private val frameSize = 160
-    private val bytesPerFrame = frameSize * 2 // Int16
+    private var handle: Long = 0L
 
     init {
-        Log.i("SpeexDecoder", "Speex decoder initialized (stub - produces silence)")
+        try {
+            handle = SpeexNative.nativeCreate()
+            Log.i("SpeexDecoder", "Native Speex decoder initialized (handle=$handle)")
+        } catch (e: Exception) {
+            Log.e("SpeexDecoder", "Failed to init native Speex: ${e.message}")
+            handle = 0L
+        }
     }
 
     fun decode(packet: ByteArray): ByteArray? {
-        // Stub: return silence frame matching expected frame size
-        // In production, this would call native libspeex via JNI
-        return ByteArray(bytesPerFrame)
+        if (handle == 0L) return ByteArray(320) // silence fallback
+        return SpeexNative.nativeDecode(handle, packet)
     }
 
     fun release() {
-        // No-op for stub
+        if (handle != 0L) {
+            SpeexNative.nativeDestroy(handle)
+            handle = 0L
+        }
     }
 }

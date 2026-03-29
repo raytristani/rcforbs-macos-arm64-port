@@ -42,6 +42,7 @@ fun RCForbApp(vm: ConnectionManagerViewModel) {
             .fillMaxSize()
             .background(AppColors.Background)
             .statusBarsPadding()
+            .navigationBarsPadding()
     ) {
         // Error banner
         errorMessage?.let { error ->

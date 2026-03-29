@@ -47,6 +47,7 @@ Carthage/Checkouts/
 local.properties
 *.apk
 *.aab
+android/app/.cxx/
 
 # IDE
 *.swp

@@ -22,7 +22,7 @@ class OpusDecoder {
             codec = android.media.MediaCodec.createDecoderByType("audio/opus")
             val format = android.media.MediaFormat.createAudioFormat("audio/opus", sampleRate, channels)
             // Opus requires CSD buffers
-            val csd0 = ByteBuffer.allocate(19)
+            val csd0 = ByteBuffer.allocate(19).order(ByteOrder.LITTLE_ENDIAN)
             csd0.put("OpusHead".toByteArray(Charsets.US_ASCII))
             csd0.put(1) // version
             csd0.put(channels.toByte()) // channels
