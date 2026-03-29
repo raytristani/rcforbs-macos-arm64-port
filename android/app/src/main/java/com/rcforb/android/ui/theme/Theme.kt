@@ -10,14 +10,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 
 private val DarkColorScheme = darkColorScheme(
-    primary = AppColors.Cream,
-    secondary = AppColors.CreamDark,
+    primary = AppColors.CreamDark,
+    secondary = AppColors.Secondary,
     background = AppColors.Background,
-    surface = AppColors.SurfaceDark,
+    surface = AppColors.Card,
+    surfaceVariant = AppColors.Secondary,
     onPrimary = AppColors.TextDark,
-    onSecondary = AppColors.TextDark,
-    onBackground = AppColors.Cream,
-    onSurface = AppColors.Cream,
+    onSecondary = AppColors.Foreground,
+    onBackground = AppColors.Foreground,
+    onSurface = AppColors.Foreground,
+    onSurfaceVariant = AppColors.MutedForeground,
+    outline = AppColors.Border,
+    outlineVariant = AppColors.MetalDarkBorder,
+    error = AppColors.ErrorDismiss,
 )
 
 @Composable

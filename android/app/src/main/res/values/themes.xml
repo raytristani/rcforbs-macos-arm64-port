@@ -2,7 +2,7 @@
 <resources>
     <style name="Theme.RCForb" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
-        <item name="android:statusBarColor">#1a1a1a</item>
-        <item name="android:navigationBarColor">#1a1a1a</item>
+        <item name="android:statusBarColor">#252520</item>
+        <item name="android:navigationBarColor">#252520</item>
     </style>
 </resources>

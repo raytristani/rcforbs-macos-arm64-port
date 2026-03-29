@@ -104,7 +104,7 @@ private fun CompassDial(bearing: Int) {
         modifier = Modifier
             .size(120.dp)
             .clip(CircleShape)
-            .background(Brush.verticalGradient(listOf(AppColors.InputBgTop, AppColors.InputBgBottom)))
+            .background(AppColors.InputBgBottom)
             .border(2.dp, AppColors.BtnBorder, CircleShape),
         contentAlignment = Alignment.Center
     ) {
@@ -123,7 +123,7 @@ private fun CompassDial(bearing: Int) {
             // Needle
             rotate(bearing.toFloat(), Offset(cx, cy)) {
                 drawLine(
-                    color = Color(0xFFCC4444),
+                    color = AppColors.LedRed,
                     start = Offset(cx, cy),
                     end = Offset(cx, cy - 45.dp.toPx()),
                     strokeWidth = 2.dp.toPx()
@@ -131,7 +131,7 @@ private fun CompassDial(bearing: Int) {
             }
 
             // Center dot
-            drawCircle(Color(0xFFEEECCC), radius = 4.dp.toPx(), center = Offset(cx, cy))
+            drawCircle(AppColors.Foreground, radius = 4.dp.toPx(), center = Offset(cx, cy))
         }
 
         // Direction labels

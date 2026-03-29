@@ -58,8 +58,8 @@ fun FrequencyDisplay(
                         unfocusedTextColor = AppColors.Cream,
                         focusedBorderColor = AppColors.BtnBorder,
                         unfocusedBorderColor = AppColors.MetalDarkBorder,
-                        focusedContainerColor = Color(0xFF2A2A22),
-                        unfocusedContainerColor = Color(0xFF2A2A22),
+                        focusedContainerColor = AppColors.Card,
+                        unfocusedContainerColor = AppColors.Card,
                         cursorColor = AppColors.Cream
                     ),
                     keyboardOptions = KeyboardOptions(

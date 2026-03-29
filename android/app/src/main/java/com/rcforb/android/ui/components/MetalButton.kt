@@ -32,21 +32,17 @@ fun MetalButton(
     onClick: () -> Unit
 ) {
     val isLight = isOn || style == MetalButtonStyle.LIGHT
-    val bgBrush = if (isLight) {
-        Brush.verticalGradient(listOf(AppColors.MetalLightTop, AppColors.MetalLightBottom))
-    } else {
-        Brush.verticalGradient(listOf(AppColors.MetalDarkTop, AppColors.MetalDarkBottom))
-    }
+    val bgColor = if (isLight) AppColors.MetalLightBottom else AppColors.MetalDarkTop
     val fgColor = if (isLight) AppColors.TextDark else AppColors.Cream
     val borderColor = if (isLight) AppColors.Cream else AppColors.MetalDarkBorder
-    val shape = RoundedCornerShape(3.dp)
+    val shape = RoundedCornerShape(8.dp)
 
     Box(
         modifier = Modifier
             .then(if (width != null) Modifier.width(width) else Modifier)
             .height(height)
             .clip(shape)
-            .background(bgBrush)
+            .background(bgColor)
             .border(1.dp, borderColor, shape)
             .noRippleClickable(onClick)
             .then(if (width != null) Modifier else Modifier.padding(horizontal = 8.dp)),

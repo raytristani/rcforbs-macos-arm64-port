@@ -51,6 +51,9 @@ class ConnectionManagerViewModel : ViewModel() {
     private val _connectedStationName = MutableStateFlow("")
     val connectedStationName: StateFlow<String> = _connectedStationName
 
+    private val _connectedStation = MutableStateFlow<RemoteStation?>(null)
+    val connectedStation: StateFlow<RemoteStation?> = _connectedStation
+
     private var udpClient: UDPClient? = null
     private var tcpClient: TCPClientV7? = null
     private var username = ""
@@ -100,6 +103,7 @@ class ConnectionManagerViewModel : ViewModel() {
         viewModelScope.launch {
             _connectionState.value = ConnectionState.CONNECTING
             _connectedStationName.value = station.serverName
+            _connectedStation.value = station
             commandCount = 0
 
             val host = station.host
@@ -213,6 +217,7 @@ class ConnectionManagerViewModel : ViewModel() {
         _rotatorStateData.value = null; _ampStateData.value = null; _switchStateData.value = null
         _chatMessages.value = emptyList()
         _connectedStationName.value = ""
+        _connectedStation.value = null
         _connectionState.value = ConnectionState.AUTHENTICATED
     }
 

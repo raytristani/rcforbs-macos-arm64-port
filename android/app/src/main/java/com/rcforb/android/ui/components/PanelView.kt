@@ -18,14 +18,12 @@ fun PanelView(
     title: String,
     content: @Composable () -> Unit
 ) {
-    val shape = RoundedCornerShape(4.dp)
+    val shape = RoundedCornerShape(10.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(
-                Brush.verticalGradient(listOf(AppColors.PanelBgTop, AppColors.PanelBgBottom))
-            )
+            .background(AppColors.PanelBgBottom)
             .border(1.dp, AppColors.PanelBorder, shape)
             .padding(6.dp)
     ) {
