@@ -11,6 +11,7 @@ import com.rcforb.android.networking.UDPClient
 import com.rcforb.android.protocol.CommandParser
 import com.rcforb.android.protocol.md5
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -115,7 +116,7 @@ class ConnectionManagerViewModel : ViewModel() {
                 Log.i("Connection", "V10 failed, trying V7 TCP...")
                 val tcpOk = tryV7(host, port, station.voipPort)
                 if (!tcpOk) {
-                    _connectionState.value = ConnectionState.FAILED
+                    _connectionState.value = ConnectionState.AUTHENTICATED
                     _errorMessage.value = "Could not connect to ${station.serverName}"
                     return@launch
                 }
@@ -135,6 +136,7 @@ class ConnectionManagerViewModel : ViewModel() {
             launch {
                 AuthService.trackOnline(username, passwordMD5, station.serverId)
             }
+
         }
     }
 
