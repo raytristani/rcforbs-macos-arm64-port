@@ -38,6 +38,7 @@ class AudioBridge {
     private val batchFrames = 4
     private val audioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var batchJob: Job? = null
+    private var rxSpeexFrameCount = 2 // frames per RX packet, detected dynamically
 
     var onEncodedAudio: ((ByteArray) -> Unit)? = null
 
@@ -104,7 +105,11 @@ class AudioBridge {
         if (pcm.isEmpty()) return
 
         rxPacketCount++
-        if (rxPacketCount <= 3) {
+        if (rxPacketCount == 1 && codecType == CodecType.SPEEX) {
+            // Detect frames per packet from first RX: pcm bytes / (160 samples * 2 bytes)
+            rxSpeexFrameCount = (pcm.size / 320).coerceAtLeast(1)
+            Log.i("AudioBridge", "RX packet #1: ${data.size} encoded -> ${pcm.size} PCM bytes = $rxSpeexFrameCount frames/packet")
+        } else if (rxPacketCount <= 3) {
             Log.i("AudioBridge", "RX packet #$rxPacketCount: ${data.size} encoded -> ${pcm.size} PCM bytes")
         }
 
@@ -157,8 +162,10 @@ class AudioBridge {
         audioTrack?.setVolume(0.05f)
 
         // Speex uses 8kHz mic, Opus uses 48kHz
+        // Match TX frame count to what the server sends us in RX
         val txSampleRate = if (codecType == CodecType.SPEEX) 8000 else sampleRate
-        val txFrame = if (codecType == CodecType.SPEEX) 160 else txFrameSize
+        val txFrame = if (codecType == CodecType.SPEEX) 160 * rxSpeexFrameCount else txFrameSize
+        Log.i("AudioBridge", "TX config: rate=$txSampleRate, samplesPerPacket=$txFrame ($rxSpeexFrameCount frames)")
 
         try {
             try { audioRecord?.release() } catch (_: Exception) {}
@@ -193,6 +200,9 @@ class AudioBridge {
                             speexEncoder?.encode(buffer)
                         }
                         if (encoded != null) {
+                            if (readCount <= 3) {
+                                Log.i("AudioBridge", "TX frame #$readCount: ${encoded.size} bytes, first10=[${encoded.take(10).joinToString(",") { (it.toInt() and 0xFF).toString() }}]")
+                            }
                             onEncodedAudio?.invoke(encoded)
                         }
                     }

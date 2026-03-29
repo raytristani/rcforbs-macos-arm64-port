@@ -102,23 +102,26 @@ Java_com_rcforb_android_audio_SpeexNative_nativeEncode(JNIEnv *env, jclass clazz
 
     jsize in_len = (*env)->GetArrayLength(env, pcm);
     int num_samples = in_len / 2;
-    LOGI("nativeEncode: in_len=%d, num_samples=%d, frame_size=%d", in_len, num_samples, h->frame_size);
-    if (num_samples < h->frame_size) {
-        LOGI("nativeEncode: not enough samples, returning null");
-        return NULL;
-    }
+    if (num_samples < h->frame_size) return NULL;
 
     jbyte *in_data = (*env)->GetByteArrayElements(env, pcm, NULL);
+    short *samples = (short *)in_data;
 
+    // Encode all complete frames into one bitstream (matching NSpeex behavior)
     speex_bits_reset(&h->bits);
-    int enc_ret = speex_encode_int(h->enc_state, (short *)in_data, &h->bits);
+    int frames_encoded = 0;
+    int offset = 0;
+    while (offset + h->frame_size <= num_samples) {
+        speex_encode_int(h->enc_state, samples + offset, &h->bits);
+        offset += h->frame_size;
+        frames_encoded++;
+    }
     (*env)->ReleaseByteArrayElements(env, pcm, in_data, JNI_ABORT);
 
-    int nb_bytes = speex_bits_nbytes(&h->bits);
-    char output[1024];
-    int written = speex_bits_write(&h->bits, output, sizeof(output));
+    if (frames_encoded == 0) return NULL;
 
-    LOGI("nativeEncode: enc_ret=%d, nb_bytes=%d, written=%d", enc_ret, nb_bytes, written);
+    char output[4096];
+    int written = speex_bits_write(&h->bits, output, sizeof(output));
     if (written <= 0) return NULL;
 
     jbyteArray result = (*env)->NewByteArray(env, written);
