@@ -98,8 +98,10 @@ class TCPClientV7(private val voipPort: Int) {
 
     fun sendPTT(on: Boolean) {
         if (on) txPacketCount = 0
+        // PTT is handled by the TX button command on the command socket.
+        // The "PTT" data packet on audio socket is sent to signal the server,
+        // but some servers may not need it. Send it anyway for compatibility.
         if (on) {
-            // Send "PTT" as single packet matching C# SendDataPacket("PTT"): type=1
             val out = audioOut ?: return
             try {
                 val pttStr = "PTT".toByteArray(Charsets.US_ASCII)
@@ -107,9 +109,9 @@ class TCPClientV7(private val voipPort: Int) {
                 val lenBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(pttStr.size).array()
                 System.arraycopy(lenBytes, 0, packet, 0, 4)
                 packet[4] = 1 // type=1 for PTT control
-                // bytes 5-9 already zero
                 System.arraycopy(pttStr, 0, packet, 10, pttStr.size)
                 out.write(packet)
+                out.flush()
             } catch (_: Exception) {}
         }
     }
