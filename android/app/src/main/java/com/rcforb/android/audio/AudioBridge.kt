@@ -29,6 +29,7 @@ class AudioBridge {
     // TX state / volume ducking
     private var isTXActive = false
     private var savedVolume: Float = 1.0f
+    private var currentVolume: Float = 1.0f
     private var audioRecord: AudioRecord? = null
     private var txJob: Job? = null
     private val txFrameSize = 960 // 20ms at 48kHz
@@ -149,9 +150,10 @@ class AudioBridge {
     fun startTX() {
         if (!isActive || isTXActive) return
         isTXActive = true
+        Log.i("AudioBridge", "startTX: ducking volume from $currentVolume to 0.05")
 
         // Volume ducking — save current volume and reduce to near-silent
-        savedVolume = audioTrack?.let { 1.0f } ?: 1.0f
+        savedVolume = currentVolume
         audioTrack?.setVolume(0.05f)
 
         val bufSize = AudioRecord.getMinBufferSize(
@@ -204,11 +206,19 @@ class AudioBridge {
         } catch (_: Exception) {}
         audioRecord = null
 
-        // Restore volume after TX
-        audioTrack?.setVolume(savedVolume)
+        // Restore volume and restart AudioTrack if it got disabled
+        Log.i("AudioBridge", "stopTX: restoring volume to $savedVolume")
+        audioTrack?.let { track ->
+            track.setVolume(savedVolume)
+            if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                Log.i("AudioBridge", "stopTX: AudioTrack not playing (state=${track.playState}), restarting")
+                try { track.play() } catch (_: Exception) {}
+            }
+        }
     }
 
     fun setVolume(level: Float) {
+        currentVolume = level
         audioTrack?.setVolume(level)
     }
 

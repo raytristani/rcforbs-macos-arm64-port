@@ -65,3 +65,64 @@ Java_com_rcforb_android_audio_SpeexNative_nativeDestroy(JNIEnv *env, jclass claz
     }
     free(h);
 }
+
+/* --- Encoder --- */
+
+typedef struct {
+    void *enc_state;
+    SpeexBits bits;
+    int frame_size;
+} SpeexEncHandle;
+
+JNIEXPORT jlong JNICALL
+Java_com_rcforb_android_audio_SpeexNative_nativeCreateEncoder(JNIEnv *env, jclass clazz, jint quality) {
+    SpeexEncHandle *h = (SpeexEncHandle *)calloc(1, sizeof(SpeexEncHandle));
+    if (!h) return 0;
+
+    h->enc_state = speex_encoder_init(&speex_nb_mode);
+    speex_bits_init(&h->bits);
+
+    int q = quality;
+    speex_encoder_ctl(h->enc_state, SPEEX_SET_QUALITY, &q);
+    speex_encoder_ctl(h->enc_state, SPEEX_GET_FRAME_SIZE, &h->frame_size);
+
+    return (jlong)(intptr_t)h;
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_rcforb_android_audio_SpeexNative_nativeEncode(JNIEnv *env, jclass clazz,
+        jlong handle, jbyteArray pcm) {
+    SpeexEncHandle *h = (SpeexEncHandle *)(intptr_t)handle;
+    if (!h || !h->enc_state) return NULL;
+
+    jsize in_len = (*env)->GetArrayLength(env, pcm);
+    int num_samples = in_len / 2;
+    if (num_samples < h->frame_size) return NULL;
+
+    jbyte *in_data = (*env)->GetByteArrayElements(env, pcm, NULL);
+
+    speex_bits_reset(&h->bits);
+    speex_encode_int(h->enc_state, (short *)in_data, &h->bits);
+    (*env)->ReleaseByteArrayElements(env, pcm, in_data, JNI_ABORT);
+
+    int nb_bytes = speex_bits_nbytes(&h->bits);
+    char output[1024];
+    int written = speex_bits_write(&h->bits, output, sizeof(output));
+
+    if (written <= 0) return NULL;
+
+    jbyteArray result = (*env)->NewByteArray(env, written);
+    (*env)->SetByteArrayRegion(env, result, 0, written, (jbyte *)output);
+    return result;
+}
+
+JNIEXPORT void JNICALL
+Java_com_rcforb_android_audio_SpeexNative_nativeDestroyEncoder(JNIEnv *env, jclass clazz, jlong handle) {
+    SpeexEncHandle *h = (SpeexEncHandle *)(intptr_t)handle;
+    if (!h) return;
+    if (h->enc_state) {
+        speex_bits_destroy(&h->bits);
+        speex_encoder_destroy(h->enc_state);
+    }
+    free(h);
+}
