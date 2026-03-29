@@ -1,9 +1,9 @@
 package com.rcforb.android
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -19,7 +19,7 @@ import com.rcforb.android.ui.login.LoginScreen
 import com.rcforb.android.ui.lobby.LobbyScreen
 import com.rcforb.android.ui.radio.RadioScreen
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private var vm: ConnectionManagerViewModel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {

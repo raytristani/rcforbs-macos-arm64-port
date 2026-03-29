@@ -253,6 +253,7 @@ class ConnectionManagerViewModel : ViewModel() {
 
     fun sendPTT(on: Boolean) {
         val txButton = getTXButton()
+        Log.i("PTT", "sendPTT($on) txButton=$txButton tcp=${tcpClient != null} udp=${udpClient != null}")
         if (txButton != null) {
             sendCommand(CommandParser.setButton(txButton, if (on) "1" else "0"))
         }
@@ -335,12 +336,16 @@ class ConnectionManagerViewModel : ViewModel() {
     private fun handleControlByte(byte: Byte) {
         when (byte) {
             com.rcforb.android.protocol.ControlByte.PTT -> {
+                Log.i("Connection", "Server granted PTT — starting TX audio")
                 val data = radioState.toData().copy(txEnabled = true)
                 _radioStateData.value = data
+                audioBridge.startTX()
             }
             com.rcforb.android.protocol.ControlByte.PTT_OFF -> {
+                Log.i("Connection", "Server revoked PTT — stopping TX audio")
                 val data = radioState.toData().copy(txEnabled = false)
                 _radioStateData.value = data
+                audioBridge.stopTX()
             }
         }
     }

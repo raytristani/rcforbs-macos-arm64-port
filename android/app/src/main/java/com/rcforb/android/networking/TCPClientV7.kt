@@ -92,7 +92,7 @@ class TCPClientV7(private val voipPort: Int) {
     }
 
     fun sendPTT(on: Boolean) {
-        sendRawCmd(byteArrayOf(if (on) ControlByte.PTT else ControlByte.PTT_OFF))
+        Log.d("TCPv7", "sendPTT($on) audioOut=${audioOut != null}")
         if (on) {
             // Send "PTT" string on audio channel with type=1 header (matches C# SendDataPacket)
             val out = audioOut ?: return
@@ -104,12 +104,18 @@ class TCPClientV7(private val voipPort: Int) {
                 header.put(ByteArray(5))
                 out.write(header.array())
                 out.write(pttBytes)
+                out.flush()
             } catch (_: Exception) {}
         }
+        // V7: PTT off is detected by server when audio stops flowing — no explicit off packet
     }
 
     fun sendAudio(data: ByteArray) {
-        val out = audioOut ?: return
+        Log.d("TCPv7", "sendAudio: ${data.size} bytes")
+        val out = audioOut ?: run {
+            Log.w("TCPv7", "sendAudio: audioOut is null!")
+            return
+        }
         try {
             val header = ByteBuffer.allocate(10).order(ByteOrder.LITTLE_ENDIAN)
             header.putInt(data.size)
@@ -117,7 +123,10 @@ class TCPClientV7(private val voipPort: Int) {
             header.put(ByteArray(5))
             out.write(header.array())
             out.write(data)
-        } catch (_: Exception) {}
+            out.flush()
+        } catch (e: Exception) {
+            Log.e("TCPv7", "sendAudio failed: ${e.message}")
+        }
     }
 
     fun sendSessionLogin(user: String, passwordMD5: String) {
