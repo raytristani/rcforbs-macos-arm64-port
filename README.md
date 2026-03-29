@@ -17,33 +17,79 @@ RCForb Client connects to RCForb Server instances published on RemoteHams.com, g
 
 ## Screenshots
 
-### Login
+### macOS
+
+#### Login
 Sign in with your RemoteHams.com credentials. Touch ID is supported on compatible Macs for quick access.
 
-![Login screen](docs/images/login-screen.png)
+![macOS Login screen](docs/images/macos-login.png)
 
-### Station Lobby
+#### Station Lobby
 Browse available remote stations worldwide. Each listing shows the radio model, location, grid square, protocol version, and connection type.
 
-![Station lobby](docs/images/station-lobby.png)
+![macOS Station lobby](docs/images/macos-lobby.png)
 
-### Radio Control Panel
+#### Radio Control Panel
 Full radio control interface with VFO A/B tuning knobs, frequency display, S-meter, mode and filter selection, button controls, adjustment sliders, status readouts, and Push-to-Talk.
 
-![Radio control panel](docs/images/radio-control-panel.png)
+![macOS Radio control panel](docs/images/macos-radio-control.png)
 
-### Radio Control with Chat
+#### Radio Control with Chat
 The chat sidebar lets you communicate with other operators connected to the same station in real time.
 
-![Radio control with chat sidebar](docs/images/radio-control-with-chat.png)
+![macOS Radio control with chat sidebar](docs/images/macos-radio-with-chat.png)
+
+### iPadOS
+
+#### Login
+Sign in with your RemoteHams.com credentials on iPad.
+
+![iPadOS Login screen](docs/images/ipados/ipados-login.png)
+
+#### Station Lobby
+Browse and connect to remote stations with a touch-optimized interface. Tap a station to select, tap again to connect.
+
+![iPadOS Station lobby](docs/images/ipados/ipados-lobby.png)
+
+#### Radio Control Panel
+Compact single-screen layout optimized for iPad with VFO knobs, controls, adjustment sliders, and Push-to-Talk all visible at once.
+
+![iPadOS Radio control panel](docs/images/ipados/ipados-radio-control.png)
+
+#### Radio Control with Chat
+Chat sidebar for communicating with other operators connected to the same station.
+
+![iPadOS Radio control with chat sidebar](docs/images/ipados/ipados-radio-with-chat.png)
+
+### Android
+
+#### Login
+Sign in with your RemoteHams.com credentials on Android tablets.
+
+![Android Login screen](docs/images/android/android-login.png)
+
+#### Station Lobby
+Browse available remote stations with Material Design interface. Tap a station to connect.
+
+![Android Station lobby](docs/images/android/android-lobby.png)
+
+#### Radio Control Panel
+Full radio control interface built with Jetpack Compose, featuring VFO knobs, button grid, adjustment sliders, and Push-to-Talk.
+
+![Android Radio control panel](docs/images/android/android-radio-control.png)
+
+#### Radio Control with Chat
+Chat panel for real-time communication with other operators on the station.
+
+![Android Radio control with chat](docs/images/android/android-radio-with-chat.png)
 
 ## Platform Support
 
 | Platform | Status | Technology | Distribution |
 |----------|--------|-----------|--------------|
 | macOS (Apple Silicon) | Available | Swift / SwiftUI | ZIP archive in `dist/macos/` |
-| iPadOS | Developed, awaiting device testing | Swift / SwiftUI | Build from source |
-| Android | In development | Kotlin / Jetpack Compose | Build from source |
+| iPadOS | Available (simulator tested) | Swift / SwiftUI | Build from source via Xcode |
+| Android | Available (emulator tested) | Kotlin / Jetpack Compose | Build from source via Gradle |
 
 ## Installation
 
@@ -60,16 +106,24 @@ Download the latest pre-built ZIP archive from `dist/macos/`:
 
 ### iPadOS
 
-The iPadOS app has been developed but is awaiting testing on a physical device. To build from source:
+The iPadOS app has been tested on the iPad Pro 11-inch (M4) simulator. To build from source, open the Xcode project:
 
 ```bash
 cd ipadOS/RCForb
-swift build
+open RCForb.xcodeproj
+# Select iPad simulator target, then Build & Run
+```
+
+Or build via command line:
+
+```bash
+cd ipadOS/RCForb
+xcodebuild -project RCForb.xcodeproj -scheme RCForb -sdk iphonesimulator -destination "platform=iOS Simulator,name=iPad Pro 11-inch (M4)" build
 ```
 
 ### Android
 
-The Android app is currently in development. To build from source:
+The Android app has been tested on the Pixel Tablet emulator (API 35). To build from source:
 
 ```bash
 cd android
@@ -104,7 +158,9 @@ swift run          # Run in development
 
 ```bash
 cd ipadOS/RCForb
-swift build
+open RCForb.xcodeproj    # Build & Run from Xcode
+# or via command line:
+xcodebuild -project RCForb.xcodeproj -scheme RCForb -sdk iphonesimulator build
 ```
 
 ### Android
@@ -112,6 +168,8 @@ swift build
 ```bash
 cd android
 ./gradlew assembleDebug
+# Install on connected device/emulator:
+adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ### Prerequisites
@@ -146,25 +204,35 @@ RCForb uses a custom protocol over UDP (V10, Opus audio) or TCP (V7, Speex audio
 
 ### v1.0.6 (2026-03-28)
 
-**Bug Fixes:**
+**Bug Fixes (all platforms):**
 - **Fixed Push-to-Talk end-to-end** — Complete PTT rewrite for V7 TCP stations:
   - PTT now keys the radio's TX button via command channel (`radio::button::TX::1`), matching the C# client's `GetTXButton()`/`SetButton()` flow.
   - V7 TCP no longer sends raw PTT control bytes on the command channel (which crashed the connection).
   - Audio packets now use correct header type byte (0x02 = audio/data), matching the C# `SendAudioPacket` format.
   - Added Speex encoder for TX audio on V7/TCP stations (8kHz narrowband, quality 8).
-  - Mic capture uses a separate `AVAudioEngine` to avoid disrupting RX playback.
+  - Mic capture uses a separate `AVAudioEngine` (Swift) / `AudioRecord` (Android) to avoid disrupting RX playback.
   - RX volume is ducked to 5% during TX to prevent feedback, restored on release.
   - Reusable `AVAudioConverter` created once per TX session for cleaner sample rate conversion.
 - **Fixed marquee ticker animation** — Rewrote `MarqueeText` using `TimelineView` for reliable back-and-forth scrolling on macOS and iPadOS.
+- Successfully tested live TX on HR5HAC (Honduras, Kenwood TS-50) from macOS.
+
+**iPadOS:**
+- Added Xcode project (`RCForb.xcodeproj`) via xcodegen for simulator builds.
+- Compact single-screen layout — all controls, sliders, and PTT fit on iPad without scrolling.
+- Mode & Filters panel height matches Controls panel with internal scroll.
+- Fixed `Bundle.module` references for Xcode project compatibility.
+
+**Android:**
+- Fixed `OpusEncoder` build error (`CONFIGURE_FLAG_ENCODE` reference).
+- Added `SpeexEncoder` stub for future native Speex integration.
+- Added `getTXButton()` and TX button keying to match macOS/iPadOS PTT flow.
 
 ### v1.0.5 (2026-03-28)
 
-**Bug Fixes:**
-- **Added Opus encoder and mic capture** for initial PTT support. Added `NSMicrophoneUsageDescription` to macOS Info.plist.
-
-**New Features:**
-- Scrolling marquee display of the connected station name on the radio LCD (macOS and iPadOS).
-- Initial Android app scaffold with full networking, protocol, and UI implementation in Kotlin/Jetpack Compose.
+- Added Opus encoder and mic capture for initial PTT support.
+- Added `NSMicrophoneUsageDescription` to macOS Info.plist.
+- Scrolling marquee display of connected station name on radio LCD (macOS and iPadOS).
+- Initial Android app scaffold with full networking, protocol, and UI in Kotlin/Jetpack Compose.
 
 ### v1.0.4 (2026-03-28)
 
