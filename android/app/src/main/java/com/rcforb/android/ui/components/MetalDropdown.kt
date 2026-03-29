@@ -24,7 +24,7 @@ fun MetalDropdown(
     onChange: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(3.dp)
+    val shape = RoundedCornerShape(8.dp)
 
     Box {
         Box(
@@ -32,9 +32,7 @@ fun MetalDropdown(
                 .fillMaxWidth()
                 .height(22.dp)
                 .clip(shape)
-                .background(
-                    Brush.verticalGradient(listOf(AppColors.ChassisGradientFrom, AppColors.ChassisGradientTo))
-                )
+                .background(AppColors.ChassisGradientTo)
                 .border(1.dp, AppColors.BtnBorder, shape)
                 .noRippleClickable { expanded = true }
                 .padding(horizontal = 4.dp),

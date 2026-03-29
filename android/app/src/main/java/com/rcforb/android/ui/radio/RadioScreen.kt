@@ -29,9 +29,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rcforb.android.models.RadioStateData
+import com.rcforb.android.models.RemoteStation
 import com.rcforb.android.models.ServerInfoData
 import com.rcforb.android.protocol.CommandParser
 import com.rcforb.android.services.ConnectionManagerViewModel
+import com.rcforb.android.services.FavoriteStation
+import com.rcforb.android.services.FavoritesStore
 import com.rcforb.android.ui.components.*
 import com.rcforb.android.ui.theme.AppColors
 import com.rcforb.android.ui.theme.noRippleClickable
@@ -54,16 +57,40 @@ private val btnDesc = mapOf(
 fun RadioScreen(vm: ConnectionManagerViewModel) {
     val rs by vm.radioStateData.collectAsState()
     val si by vm.serverInfoData.collectAsState()
+    val connectedStation by vm.connectedStation.collectAsState()
     var vfoStep by remember { mutableIntStateOf(100) }
     var showChat by remember { mutableStateOf(false) }
     var isPTT by remember { mutableStateOf(false) }
     var volume by remember { mutableFloatStateOf(0.5f) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isFavorite by remember(connectedStation) {
+        mutableStateOf(connectedStation?.let { FavoritesStore.isFavorite(context, it.serverId) } ?: false)
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(AppColors.DarkPanel)) {
         // Top Bar
-        TopBar(vm, si, showChat, volume,
+        TopBar(vm, si, showChat, volume, isFavorite,
             onToggleChat = { showChat = !showChat },
-            onVolumeChange = { volume = it; vm.audioBridge.setVolume(it) }
+            onVolumeChange = { volume = it; vm.audioBridge.setVolume(it) },
+            onToggleFavorite = {
+                connectedStation?.let { station ->
+                    if (isFavorite) {
+                        FavoritesStore.removeFavorite(context, station.serverId)
+                    } else {
+                        FavoritesStore.addFavorite(context, FavoriteStation(
+                            serverId = station.serverId,
+                            serverName = station.serverName,
+                            radioModel = station.radioModel,
+                            description = station.description,
+                            host = station.host,
+                            port = station.port,
+                            voipPort = station.voipPort,
+                            isV7 = station.isV7
+                        ))
+                    }
+                    isFavorite = !isFavorite
+                }
+            }
         )
 
         Row(modifier = Modifier.weight(1f)) {
@@ -179,7 +206,7 @@ fun RadioScreen(vm: ConnectionManagerViewModel) {
                                                 ) { hz ->
                                                     vm.sendCommand(CommandParser.setFrequencyA(hz.toString()))
                                                 }
-                                                Text("VFO A", color = Color(0xFFAAAAAA),
+                                                Text("VFO A", color = AppColors.MutedForeground,
                                                     fontSize = AppColors.sp11, fontWeight = FontWeight.Bold)
                                             }
 
@@ -194,7 +221,7 @@ fun RadioScreen(vm: ConnectionManagerViewModel) {
                                                     ) { hz ->
                                                         vm.sendCommand(CommandParser.setFrequencyB(hz.toString()))
                                                     }
-                                                    Text("VFO B", color = Color(0xFF888888),
+                                                    Text("VFO B", color = AppColors.MutedForeground,
                                                         fontSize = AppColors.sp11)
                                                 }
                                             }
@@ -270,14 +297,16 @@ private fun TopBar(
     si: ServerInfoData?,
     showChat: Boolean,
     volume: Float,
+    isFavorite: Boolean,
     onToggleChat: () -> Unit,
-    onVolumeChange: (Float) -> Unit
+    onVolumeChange: (Float) -> Unit,
+    onToggleFavorite: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(32.dp)
-            .background(Brush.verticalGradient(listOf(AppColors.PanelBgTop, AppColors.PanelBgBottom)))
+            .background(AppColors.PanelBgBottom)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -285,7 +314,16 @@ private fun TopBar(
         MetalButton(title = "Disconnect", isOn = false, fontSize = AppColors.sp11, height = 20.dp) { vm.disconnect() }
         MetalButton(title = "Reset", isOn = false, fontSize = AppColors.sp11, height = 20.dp) { vm.clearSliderOverrides() }
 
-        Text("Vol", color = Color(0xFF777777), fontSize = AppColors.sp10)
+        Text(
+            text = if (isFavorite) "\u2764" else "\u2661",
+            color = if (isFavorite) AppColors.LedRed else AppColors.MutedForeground,
+            fontSize = AppColors.sp18,
+            modifier = Modifier
+                .noRippleClickable { onToggleFavorite() }
+                .padding(horizontal = 4.dp)
+        )
+
+        Text("Vol", color = AppColors.MutedForeground, fontSize = AppColors.sp10)
         CompactSlider(
             value = volume,
             min = 0f,
@@ -297,9 +335,9 @@ private fun TopBar(
         Spacer(modifier = Modifier.weight(1f))
 
         val ledColor = when {
-            si?.radioOpen == true -> Color(0xFF44CC44)
-            si?.radioInUse == true -> Color(0xFFCC4444)
-            else -> Color(0xFF666666)
+            si?.radioOpen == true -> AppColors.LedGreen
+            si?.radioInUse == true -> AppColors.LedRed
+            else -> AppColors.MutedForeground.copy(alpha = 0.6f)
         }
         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(ledColor))
         Text(
@@ -308,9 +346,9 @@ private fun TopBar(
                 si?.radioInUse == true -> "In Use"
                 else -> "Closed"
             },
-            color = Color(0xFF888888), fontSize = AppColors.sp10
+            color = AppColors.MutedForeground, fontSize = AppColors.sp10
         )
-        Text(si?.serverTime ?: "", color = Color(0xFF666666), fontSize = AppColors.sp10)
+        Text(si?.serverTime ?: "", color = AppColors.MutedForeground.copy(alpha = 0.6f), fontSize = AppColors.sp10)
         MetalButton(title = "Chat", isOn = showChat, fontSize = AppColors.sp11, height = 20.dp) { onToggleChat() }
     }
 }
@@ -318,17 +356,17 @@ private fun TopBar(
 @Composable
 private fun LcdHero(rs: RadioStateData, si: ServerInfoData?, vm: ConnectionManagerViewModel) {
     val stationName by vm.connectedStationName.collectAsState()
-    val lcdShape = RoundedCornerShape(4.dp)
+    val lcdShape = RoundedCornerShape(10.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(lcdShape)
-            .background(Brush.linearGradient(listOf(Color(0xFFE8D888), Color(0xFFF0E4A0))))
+            .background(Color(0xFFE8D888))
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("TOT: ${si?.tot ?: 180}s", color = Color(0xFF887744), fontSize = AppColors.sp9)
-            Text(rs.smeterALabel, color = Color(0xFF887744), fontSize = AppColors.sp9)
+            Text("TOT: ${si?.tot ?: 180}s", color = Color(0xFF887744) /* LCD label */, fontSize = AppColors.sp9)
+            Text(rs.smeterALabel, color = Color(0xFF887744) /* LCD label */, fontSize = AppColors.sp9)
         }
         SMeterView(value = rs.smeterA, label = rs.smeterALabel)
         Spacer(Modifier.height(2.dp))
@@ -433,9 +471,8 @@ private fun SliderCell(
             modifier = Modifier
                 .width(28.dp)
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(2.dp))
-                .background(Brush.verticalGradient(
-                    listOf(AppColors.MetalDarkTop, AppColors.MetalDarkBottom))),
+                .clip(RoundedCornerShape(6.dp))
+                .background(AppColors.MetalDarkTop),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -447,7 +484,7 @@ private fun SliderCell(
             )
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(name, color = Color(0xFF999999), fontSize = AppColors.sp9,
+            Text(name, color = AppColors.MutedForeground, fontSize = AppColors.sp9,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 lineHeight = AppColors.sp10)
             CompactSlider(
@@ -474,13 +511,12 @@ private fun CompactMessagesPanel(rs: RadioStateData) {
                         modifier = Modifier
                             .widthIn(min = 40.dp)
                             .height(18.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Brush.verticalGradient(
-                                listOf(AppColors.MetalDarkTop, AppColors.MetalDarkBottom)))
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(AppColors.MetalDarkTop)
                             .padding(horizontal = 4.dp)
                             .wrapContentHeight(Alignment.CenterVertically)
                     )
-                    Text(name, color = Color(0xFF888888), fontSize = AppColors.sp9)
+                    Text(name, color = AppColors.MutedForeground, fontSize = AppColors.sp9)
                 }
             }
         }
@@ -489,19 +525,15 @@ private fun CompactMessagesPanel(rs: RadioStateData) {
 
 @Composable
 private fun PTTButton(isPTT: Boolean, onPTT: (Boolean) -> Unit) {
-    val shape = RoundedCornerShape(4.dp)
-    val bgBrush = if (isPTT) {
-        Brush.verticalGradient(listOf(Color(0xFFFF6644), Color(0xFFCC3322)))
-    } else {
-        Brush.verticalGradient(listOf(Color(0xFFCC4433), Color(0xFF882222)))
-    }
+    val shape = RoundedCornerShape(10.dp)
+    val bgColor = if (isPTT) Color(0xFFCC3322) else Color(0xFF7A2222)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(44.dp)
             .clip(shape)
-            .background(bgBrush)
+            .background(bgColor)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
@@ -539,7 +571,7 @@ private fun ChatSidebar(vm: ConnectionManagerViewModel) {
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(AppColors.ChassisGradientFrom, AppColors.ChassisGradientTo)))
+                .background(AppColors.ChassisGradientTo)
                 .padding(horizontal = 8.dp, vertical = 6.dp)
         )
 
@@ -556,7 +588,7 @@ private fun ChatSidebar(vm: ConnectionManagerViewModel) {
         ) {
             chatMessages.forEach { msg ->
                 if (msg.isSystem) {
-                    Text(msg.text, color = Color(0xFF888666), fontSize = AppColors.sp11)
+                    Text(msg.text, color = AppColors.MutedForeground, fontSize = AppColors.sp11)
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text("${msg.user}:", color = AppColors.Cream, fontSize = AppColors.sp11, fontWeight = FontWeight.Bold)
@@ -565,7 +597,7 @@ private fun ChatSidebar(vm: ConnectionManagerViewModel) {
                 }
             }
             if (chatMessages.isEmpty()) {
-                Text("No messages yet", color = Color(0xFF666666), fontSize = AppColors.sp11)
+                Text("No messages yet", color = AppColors.MutedForeground.copy(alpha = 0.6f), fontSize = AppColors.sp11)
             }
         }
 

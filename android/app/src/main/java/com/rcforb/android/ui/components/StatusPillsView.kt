@@ -23,23 +23,19 @@ fun StatusPillsView(
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         order.forEach { name ->
             val isOn = statuses[name] ?: false
-            val shape = RoundedCornerShape(3.dp)
-            val bgBrush = if (isOn) {
-                Brush.verticalGradient(listOf(AppColors.Cream, AppColors.StatusActive))
-            } else {
-                Brush.verticalGradient(listOf(AppColors.MetalDarkTop, AppColors.MetalDarkBottom))
-            }
+            val shape = RoundedCornerShape(6.dp)
+            val bgColor = if (isOn) AppColors.StatusActive else AppColors.MetalDarkTop
 
             Text(
                 text = name,
-                color = if (isOn) Color(0xFF333000) else AppColors.LabelDim,
+                color = if (isOn) AppColors.TextDark else AppColors.LabelDim,
                 fontSize = AppColors.sp10,
                 fontFamily = FontFamily.Monospace,
                 lineHeight = AppColors.sp10,
                 modifier = Modifier
                     .alpha(if (isOn) 0.9f else 0.6f)
                     .clip(shape)
-                    .background(bgBrush)
+                    .background(bgColor)
                     .border(0.5.dp, AppColors.StatusActive, shape)
                     .padding(horizontal = 4.dp, vertical = 2.dp)
             )

@@ -89,7 +89,7 @@ Chat panel for real-time communication with other operators on the station.
 |----------|--------|-----------|--------------|
 | macOS (Apple Silicon) | Available | Swift / SwiftUI | ZIP archive in `dist/macos/` |
 | iPadOS | Available (simulator tested) | Swift / SwiftUI | Build from source via Xcode |
-| Android | Available (emulator tested) | Kotlin / Jetpack Compose | Build from source via Gradle |
+| Android | Available (tablet tested) | Kotlin / Jetpack Compose | Build from source via Gradle |
 
 ## Installation
 
@@ -123,14 +123,14 @@ xcodebuild -project RCForb.xcodeproj -scheme RCForb -sdk iphonesimulator -destin
 
 ### Android
 
-The Android app has been tested on the Pixel Tablet emulator (API 35). To build from source:
+The Android app has been tested on the Samsung Galaxy Tab S11 and Pixel Tablet emulator (API 35). Requires Android NDK 27+ for native Speex audio decoding. To build from source:
 
 ```bash
 cd android
 ./gradlew assembleDebug
 ```
 
-Requires Android Studio or the Android SDK with API level 26+ (Android 8.0). The app uses Jetpack Compose for the UI and Android's MediaCodec for Opus audio encoding/decoding.
+Requires Android Studio or the Android SDK with API level 26+ (Android 8.0), plus Android NDK 27+ and CMake for native Speex audio decoding. The app uses Jetpack Compose for the UI, MediaCodec for Opus, and native libspeex via JNI for Speex audio.
 
 ## Project Structure
 
@@ -176,8 +176,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 - Swift 5.9+ (macOS/iPadOS)
 - macOS 14+ (Sonoma) or iPadOS 17+
-- Android SDK API 26+ and Kotlin 1.9+ (Android)
+- Android SDK API 26+, Kotlin 1.9+, NDK 27+, CMake 3.22+ (Android)
 - libopus and libspeex are bundled with the macOS app
+- libspeex 1.2.1 is compiled from source via NDK/JNI for Android
 
 ## Test Stations
 
@@ -201,6 +202,18 @@ Public stations with TX enabled that can be used for testing PTT and audio:
 RCForb uses a custom protocol over UDP (V10, Opus audio) or TCP (V7, Speex audio) to communicate with RCForb Server instances. The full protocol specification is documented in `docs/PROTOCOL_SPECIFICATION.md`.
 
 ## Changelog
+
+### v1.0.7 (2026-03-29)
+
+**Android:**
+- **Native Speex audio decoding** — Compiled libspeex 1.2.1 via NDK/JNI for real audio playback on V7 TCP stations (was previously a silence stub).
+- **Nova Olive dark theme** — Complete visual overhaul matching shadcn/ui radix-nova olive preset: flat solid colors (no gradients), generous rounded corners, dark olive-tinted backgrounds with off-white text.
+- **Favorite stations** — Heart button in radio TopBar to favorite the current station. Favorites panel in lobby sidebar with LCD-style station cards. Persisted via SharedPreferences.
+- **Lobby column headers** — Sticky header row with Station, Radio, Country, Grid, Proto labels above the scrollable station list.
+- **Navigation bar padding** — PTT button no longer hidden behind Samsung dock/navigation bar.
+- **Connection failure UX** — Failed station connections return to lobby instead of login screen.
+- **Opus CSD fix** — Fixed OpusHead byte order (little-endian) for V10 UDP stations.
+- Tested on Samsung Galaxy Tab S11 via USB debugging.
 
 ### v1.0.6 (2026-03-28)
 

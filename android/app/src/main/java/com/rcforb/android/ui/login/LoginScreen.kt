@@ -70,7 +70,7 @@ fun LoginScreen(vm: ConnectionManagerViewModel) {
             .background(AppColors.SurfaceDark),
         contentAlignment = Alignment.Center
     ) {
-        val cardShape = RoundedCornerShape(8.dp)
+        val cardShape = RoundedCornerShape(14.dp)
         Column(
             modifier = Modifier
                 .widthIn(max = 384.dp)
@@ -78,9 +78,7 @@ fun LoginScreen(vm: ConnectionManagerViewModel) {
                 .padding(horizontal = 24.dp)
                 .shadow(20.dp, cardShape)
                 .clip(cardShape)
-                .background(
-                    Brush.linearGradient(listOf(AppColors.ChassisGradientFrom, AppColors.InputBgBottom))
-                )
+                .background(AppColors.ChassisGradientTo)
                 .border(2.dp, AppColors.BtnBorder, cardShape)
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -106,7 +104,7 @@ fun LoginScreen(vm: ConnectionManagerViewModel) {
                     fontSize = AppColors.sp13,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(AppColors.ErrorBg, RoundedCornerShape(4.dp))
+                        .background(AppColors.ErrorBg, RoundedCornerShape(10.dp))
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -151,16 +149,13 @@ fun LoginScreen(vm: ConnectionManagerViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
 
             // Login button
-            val loginShape = RoundedCornerShape(4.dp)
+            val loginShape = RoundedCornerShape(10.dp)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(40.dp)
                     .clip(loginShape)
-                    .background(
-                        if (loading) Brush.verticalGradient(listOf(AppColors.InputBgTop, AppColors.InputBgBottom))
-                        else Brush.verticalGradient(listOf(AppColors.Cream, AppColors.CreamDark))
-                    )
+                    .background(if (loading) AppColors.InputBgBottom else AppColors.CreamDark)
                     .border(2.dp, AppColors.Cream, loginShape)
                     .noRippleClickable { if (!loading) handleLogin() }
                     .let { if (loading || user.isEmpty() || password.isEmpty()) it.then(Modifier) else it },
@@ -186,13 +181,13 @@ private fun CompactLoginField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
-    val shape = RoundedCornerShape(4.dp)
+    val shape = RoundedCornerShape(10.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(34.dp)
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(AppColors.InputBgTop, AppColors.InputBgBottom)))
+            .background(AppColors.InputBgBottom)
             .border(1.dp, AppColors.MetalDarkBorder, shape)
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.CenterStart

@@ -31,7 +31,7 @@ fun SMeterView(value: Double, label: String) {
         label = "smeter"
     )
 
-    val shape = RoundedCornerShape(2.dp)
+    val shape = RoundedCornerShape(6.dp)
 
     Box(
         modifier = Modifier
