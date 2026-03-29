@@ -8,7 +8,7 @@ enum FontRegistration {
         guard !isRegistered else { return }
         isRegistered = true
 
-        if let fontURL = Bundle.module.url(forResource: "digital-7-mono", withExtension: "ttf", subdirectory: "Fonts") {
+        if let fontURL = Bundle.main.url(forResource: "digital-7-mono", withExtension: "ttf", subdirectory: "Fonts") {
             var errorRef: Unmanaged<CFError>?
             CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, &errorRef)
         }

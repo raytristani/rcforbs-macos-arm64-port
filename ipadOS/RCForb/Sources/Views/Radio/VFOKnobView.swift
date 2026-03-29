@@ -80,7 +80,7 @@ struct VFOKnobView: View {
     }
 
     private func loadKnobImage() -> UIImage? {
-        if let url = Bundle.module.url(forResource: "knob_xlarge", withExtension: "png", subdirectory: "Images") {
+        if let url = Bundle.main.url(forResource: "knob_xlarge", withExtension: "png", subdirectory: "Images") {
             return UIImage(contentsOfFile: url.path)
         }
         if let url = Bundle.main.url(forResource: "knob_xlarge", withExtension: "png", subdirectory: "Images") {

@@ -79,8 +79,8 @@ struct RadioView: View {
                 showChat.toggle()
             }
         }
-        .padding(.horizontal, 12)
-        .frame(height: 44)
+        .padding(.horizontal, 10)
+        .frame(height: 36)
         .background(
             LinearGradient(colors: [Color.panelBgTop, Color.panelBgBottom], startPoint: .top, endPoint: .bottom)
         )
@@ -90,12 +90,12 @@ struct RadioView: View {
     private var pttArea: some View {
         VStack {
             Text("PUSH TO TALK")
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundColor(isPTT ? .white : Color.cream)
                 .tracking(2)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 80)
+        .frame(height: 44)
         .background(
             LinearGradient(
                 colors: isPTT ? [Color(hex: "#ff6644"), Color(hex: "#cc3322")] : [Color(hex: "#cc4433"), Color(hex: "#882222")],
@@ -107,7 +107,7 @@ struct RadioView: View {
                 .stroke(isPTT ? Color(hex: "#ff8866") : Color(hex: "#aa4433"), lineWidth: 2)
         )
         .cornerRadius(8)
-        .shadow(color: isPTT ? Color(hex: "#ff4422").opacity(0.5) : .black.opacity(0.3), radius: isPTT ? 12 : 6, y: 2)
+        .shadow(color: isPTT ? Color(hex: "#ff4422").opacity(0.5) : .black.opacity(0.3), radius: isPTT ? 8 : 4, y: 1)
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in
@@ -122,23 +122,22 @@ struct RadioView: View {
     // MARK: - Main Content
 
     private var mainContent: some View {
-        ScrollView {
-            VStack(spacing: 8) {
-                if let rs {
-                    lcdHero(rs)
-                    mainControlsGrid(rs)
-                    if !rs.sliderOrder.isEmpty { slidersPanel(rs) }
-                    if !rs.messageOrder.isEmpty { messagesPanel(rs) }
-                    pttArea
-                } else {
-                    Spacer()
-                    Text("Loading...")
-                        .foregroundColor(Color.cream)
-                    Spacer()
-                }
+        VStack(spacing: 4) {
+            if let rs {
+                lcdHero(rs)
+                mainControlsGrid(rs)
+                if !rs.sliderOrder.isEmpty { slidersPanel(rs) }
+                if !rs.messageOrder.isEmpty { messagesPanel(rs) }
+                pttArea
+            } else {
+                Spacer()
+                Text("Loading...")
+                    .foregroundColor(Color.cream)
+                Spacer()
             }
-            .padding(8)
         }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -148,18 +147,17 @@ struct RadioView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("TOT: \(si?.tot ?? 180)s")
-                    .font(.system(size: 10))
+                    .font(.system(size: 9))
                     .foregroundColor(Color(hex: "#887744"))
                 Spacer()
                 Text(rs.smeterALabel)
-                    .font(.system(size: 10))
+                    .font(.system(size: 9))
                     .foregroundColor(Color(hex: "#887744"))
             }
-            .padding(.bottom, 2)
 
             SMeterView(value: rs.smeterA, label: rs.smeterALabel)
 
-            HStack(alignment: .bottom, spacing: 16) {
+            HStack(alignment: .bottom, spacing: 12) {
                 FrequencyDisplay(frequency: rs.frequencyA, vfo: "A", large: true, onSet: { hz in
                     cm.sendCommand(CommandParser.setFrequencyA(String(hz)))
                 })
@@ -168,7 +166,6 @@ struct RadioView: View {
                         cm.sendCommand(CommandParser.setFrequencyB(String(hz)))
                     })
                     .opacity(0.6)
-                    .padding(.bottom, 2)
                 }
                 if !cm.connectedStationName.isEmpty {
                     MarqueeText(
@@ -177,55 +174,62 @@ struct RadioView: View {
                         color: Color(hex: "#553300")
                     )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 28)
-                    .padding(.leading, 24)
-                    .padding(.bottom, 2)
+                    .frame(height: 24)
+                    .padding(.leading, 16)
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, 2)
 
             if !rs.statusOrder.isEmpty {
                 StatusPillsView(statuses: rs.statuses, order: rs.statusOrder)
-                    .padding(.top, 4)
+                    .padding(.top, 2)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
         .background(
             LinearGradient(colors: [Color(hex: "#e8d888"), Color(hex: "#f0e4a0")], startPoint: .topLeading, endPoint: .bottomTrailing)
         )
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(hex: "#999870"), lineWidth: 2))
-        .cornerRadius(6)
-        .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(hex: "#999870"), lineWidth: 1))
+        .cornerRadius(4)
+        .shadow(color: .black.opacity(0.2), radius: 4, y: 1)
     }
 
     // MARK: - Main Controls Grid
 
-    private func mainControlsGrid(_ rs: RadioStateData) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            // Left: Mode & Filters
-            modeFiltersPanel(rs)
-                .frame(width: 160)
+    @State private var controlsPanelHeight: CGFloat = 0
 
-            // Center: Controls
+    private func mainControlsGrid(_ rs: RadioStateData) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            // Left: Mode & Filters — capped to controls panel height
+            modeFiltersPanel(rs)
+                .frame(width: 150, height: controlsPanelHeight > 0 ? controlsPanelHeight : nil)
+
+            // Center: Controls — measures its natural height
             controlsPanel(rs)
+                .background(GeometryReader { geo in
+                    Color.clear.onAppear { controlsPanelHeight = geo.size.height }
+                        .onChange(of: rs.buttonOrder.count) { controlsPanelHeight = geo.size.height }
+                })
         }
     }
 
     private func modeFiltersPanel(_ rs: RadioStateData) -> some View {
         PanelView(title: "Mode & Filters") {
-            VStack(spacing: 2) {
-                ForEach(rs.dropdownOrder, id: \.self) { name in
-                    if !name.isEmpty {
-                        let value = rs.dropdowns[name] ?? ""
-                        let opts = rs.dropdownLists[name] ?? []
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(name)
-                                .font(.system(size: 9))
-                                .foregroundColor(Color.labelDim)
-                                .lineSpacing(0)
-                            MetalDropdown(value: value, options: opts) { selected in
-                                cm.sendCommand(CommandParser.setDropdown(name, selected))
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 1) {
+                    ForEach(rs.dropdownOrder, id: \.self) { name in
+                        if !name.isEmpty {
+                            let value = rs.dropdowns[name] ?? ""
+                            let opts = rs.dropdownLists[name] ?? []
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(name)
+                                    .font(.system(size: 9))
+                                    .foregroundColor(Color.labelDim)
+                                    .lineSpacing(0)
+                                MetalDropdown(value: value, options: opts) { selected in
+                                    cm.sendCommand(CommandParser.setDropdown(name, selected))
+                                }
                             }
                         }
                     }
@@ -236,7 +240,7 @@ struct RadioView: View {
 
     private func controlsPanel(_ rs: RadioStateData) -> some View {
         PanelView(title: "Controls") {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 // Step selector
                 HStack(spacing: 4) {
                     Text("STEP (kHz)")
@@ -250,16 +254,16 @@ struct RadioView: View {
                 }
 
                 // Buttons + Knobs
-                HStack(alignment: .center, spacing: 8) {
+                HStack(alignment: .center, spacing: 6) {
                     // Left buttons
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         let half = (rs.buttonOrder.count + 1) / 2
                         ForEach(Array(rs.buttonOrder.prefix(half).enumerated()), id: \.offset) { _, name in
                             if !name.isEmpty {
                                 let on = (rs.buttons[name] ?? 0) != 0
                                 let desc = btnDesc[name] ?? ""
                                 HStack(spacing: 4) {
-                                    MetalButton(title: name, isOn: on, width: 54, height: 28, fontSize: name.count > 5 ? 9 : 11) {
+                                    MetalButton(title: name, isOn: on, width: 48, height: 22, fontSize: name.count > 5 ? 9 : 10) {
                                         cm.sendCommand(CommandParser.setButton(name, on ? "0" : "1"))
                                     }
                                     Text(desc)
@@ -270,37 +274,34 @@ struct RadioView: View {
                             }
                         }
                     }
-                    .frame(minWidth: 140)
+                    .frame(minWidth: 130)
 
                     // Center: VFO Knobs
-                    HStack(alignment: .bottom, spacing: 24) {
+                    HStack(alignment: .bottom, spacing: 16) {
                         VStack(spacing: 0) {
-                            VFOKnobView(size: 180, vfo: "A", step: vfoStep, frequency: rs.frequencyA) { hz in
+                            VFOKnobView(size: 140, vfo: "A", step: vfoStep, frequency: rs.frequencyA) { hz in
                                 cm.sendCommand(CommandParser.setFrequencyA(String(hz)))
                             }
                             Text("VFO A")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(Color(hex: "#aaaaaa"))
-                                .padding(.top, 4)
                         }
 
                         if rs.frequencyB > 0 {
                             VStack(spacing: 0) {
-                                VFOKnobView(size: 130, vfo: "B", step: vfoStep, frequency: rs.frequencyB) { hz in
+                                VFOKnobView(size: 110, vfo: "B", step: vfoStep, frequency: rs.frequencyB) { hz in
                                     cm.sendCommand(CommandParser.setFrequencyB(String(hz)))
                                 }
                                 Text("VFO B")
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 11))
                                     .foregroundColor(Color(hex: "#888888"))
-                                    .padding(.top, 4)
                             }
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
 
                     // Right buttons
-                    VStack(alignment: .trailing, spacing: 4) {
+                    VStack(alignment: .trailing, spacing: 2) {
                         let half = (rs.buttonOrder.count + 1) / 2
                         ForEach(Array(rs.buttonOrder.dropFirst(half).enumerated()), id: \.offset) { _, name in
                             if !name.isEmpty {
@@ -311,14 +312,14 @@ struct RadioView: View {
                                         .font(.system(size: 9))
                                         .foregroundColor(Color.labelMuted)
                                         .lineLimit(1)
-                                    MetalButton(title: name, isOn: on, width: 54, height: 28, fontSize: name.count > 5 ? 9 : 11) {
+                                    MetalButton(title: name, isOn: on, width: 48, height: 22, fontSize: name.count > 5 ? 9 : 10) {
                                         cm.sendCommand(CommandParser.setButton(name, on ? "0" : "1"))
                                     }
                                 }
                             }
                         }
                     }
-                    .frame(minWidth: 140)
+                    .frame(minWidth: 130)
                 }
             }
         }
@@ -328,34 +329,46 @@ struct RadioView: View {
 
     private func slidersPanel(_ rs: RadioStateData) -> some View {
         PanelView(title: "Adjustments") {
-            let columns = [GridItem(.adaptive(minimum: 180), spacing: 12)]
-            LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(rs.sliderOrder, id: \.self) { name in
-                    if !name.isEmpty {
-                        let v = rs.sliders[name] ?? 0
-                        let raw = rs.sliderRanges[name] ?? SliderRange(min: 0, max: 100, step: 1, displayOffset: "")
-                        let rMin = raw.min
-                        let rMax = raw.max > raw.min ? raw.max : raw.min + 100
-                        let rStep = raw.step > 0 ? raw.step : 1
-                        HStack(spacing: 4) {
-                            Text(verbatim: "\(Int(v.rounded()))")
-                                .font(.system(size: 10))
-                                .foregroundColor(Color.cream)
-                                .frame(width: 34, height: 20)
-                                .background(
-                                    LinearGradient(colors: [Color.metalDarkTop, Color.metalDarkBottom], startPoint: .top, endPoint: .bottom)
-                                )
-                                .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.metalDarkBorder, lineWidth: 1))
-                                .cornerRadius(3)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(name)
+            let sliders = rs.sliderOrder.filter { !$0.isEmpty }
+            let cols = 8
+            let rows = stride(from: 0, to: sliders.count, by: cols).map { i in
+                Array(sliders[i..<min(i + cols, sliders.count)])
+            }
+            VStack(spacing: 2) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: 6) {
+                        ForEach(row, id: \.self) { name in
+                            let v = rs.sliders[name] ?? 0
+                            let raw = rs.sliderRanges[name] ?? SliderRange(min: 0, max: 100, step: 1, displayOffset: "")
+                            let rMin = raw.min
+                            let rMax = raw.max > raw.min ? raw.max : raw.min + 100
+                            let rStep = raw.step > 0 ? raw.step : 1
+                            HStack(spacing: 2) {
+                                Text(verbatim: "\(Int(v.rounded()))")
                                     .font(.system(size: 9))
-                                    .foregroundColor(Color(hex: "#999999"))
-                                    .lineLimit(1)
-                                RadioSlider(name: name, serverValue: v, min: rMin, max: rMax, step: rStep) { val in
-                                    cm.sendCommand(CommandParser.setSlider(name, String(Int(val))))
+                                    .foregroundColor(Color.cream)
+                                    .frame(width: 28, height: 18)
+                                    .background(
+                                        LinearGradient(colors: [Color.metalDarkTop, Color.metalDarkBottom], startPoint: .top, endPoint: .bottom)
+                                    )
+                                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.metalDarkBorder, lineWidth: 1))
+                                    .cornerRadius(2)
+
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(name)
+                                        .font(.system(size: 9))
+                                        .foregroundColor(Color(hex: "#999999"))
+                                        .lineLimit(1)
+                                    RadioSlider(name: name, serverValue: v, min: rMin, max: rMax, step: rStep) { val in
+                                        cm.sendCommand(CommandParser.setSlider(name, String(Int(val))))
+                                    }
                                 }
+                            }
+                        }
+                        // Pad remaining columns with spacers to maintain grid alignment
+                        if row.count < cols {
+                            ForEach(0..<(cols - row.count), id: \.self) { _ in
+                                Spacer().frame(maxWidth: .infinity)
                             }
                         }
                     }
@@ -369,21 +382,21 @@ struct RadioView: View {
     private func messagesPanel(_ rs: RadioStateData) -> some View {
         PanelView(title: "Status") {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     ForEach(rs.messageOrder, id: \.self) { name in
                         if !name.isEmpty {
                             VStack(alignment: .trailing, spacing: 0) {
                                 Text(rs.messages[name] ?? "")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 10))
                                     .foregroundColor(Color.cream)
-                                    .frame(minWidth: 60, alignment: .trailing)
-                                    .frame(height: 20)
-                                    .padding(.horizontal, 6)
+                                    .frame(minWidth: 40, alignment: .trailing)
+                                    .frame(height: 18)
+                                    .padding(.horizontal, 4)
                                     .background(
                                         LinearGradient(colors: [Color.metalDarkTop, Color.metalDarkBottom], startPoint: .top, endPoint: .bottom)
                                     )
-                                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.metalDarkBorder, lineWidth: 1))
-                                    .cornerRadius(3)
+                                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.metalDarkBorder, lineWidth: 1))
+                                    .cornerRadius(2)
                                 Text(name)
                                     .font(.system(size: 9))
                                     .foregroundColor(Color(hex: "#888888"))

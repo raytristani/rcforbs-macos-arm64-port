@@ -24,7 +24,7 @@ class OpusEncoder {
             val format = MediaFormat.createAudioFormat("audio/opus", sampleRate, channels)
             format.setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
             format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, frameSize * 2)
-            codec?.configure(format, null, null, MediaCodecInfo.CodecCapabilities.CONFIGURE_FLAG_ENCODE)
+            codec?.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             codec?.start()
             isReady = true
             Log.i("OpusEncoder", "MediaCodec Opus encoder initialized")
