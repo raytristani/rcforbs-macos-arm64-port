@@ -156,8 +156,12 @@ class AudioBridge {
         savedVolume = currentVolume
         audioTrack?.setVolume(0.05f)
 
+        // Speex uses 8kHz mic, Opus uses 48kHz
+        val txSampleRate = if (codecType == CodecType.SPEEX) 8000 else sampleRate
+        val txFrame = if (codecType == CodecType.SPEEX) 160 else txFrameSize
+
         val bufSize = AudioRecord.getMinBufferSize(
-            sampleRate,
+            txSampleRate,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         )
@@ -165,15 +169,15 @@ class AudioBridge {
         try {
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
-                sampleRate,
+                txSampleRate,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
-                bufSize.coerceAtLeast(txFrameSize * 2 * 4)
+                bufSize.coerceAtLeast(txFrame * 2 * 4)
             )
             audioRecord?.startRecording()
 
             txJob = audioScope.launch {
-                val buffer = ByteArray(txFrameSize * 2) // Int16 = 2 bytes per sample
+                val buffer = ByteArray(txFrame * 2) // Int16 = 2 bytes per sample
                 while (isTXActive) {
                     val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
                     if (read == buffer.size) {
@@ -183,7 +187,10 @@ class AudioBridge {
                             speexEncoder?.encode(buffer)
                         }
                         if (encoded != null) {
+                            Log.d("AudioBridge", "TX: encoded ${encoded.size} bytes, callback=${onEncodedAudio != null}")
                             onEncodedAudio?.invoke(encoded)
+                        } else {
+                            Log.w("AudioBridge", "TX: encoder returned null (codec=$codecType)")
                         }
                     }
                 }
@@ -206,14 +213,16 @@ class AudioBridge {
         } catch (_: Exception) {}
         audioRecord = null
 
-        // Restore volume and restart AudioTrack if it got disabled
-        Log.i("AudioBridge", "stopTX: restoring volume to $savedVolume")
-        audioTrack?.let { track ->
-            track.setVolume(savedVolume)
-            if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
-                Log.i("AudioBridge", "stopTX: AudioTrack not playing (state=${track.playState}), restarting")
-                try { track.play() } catch (_: Exception) {}
-            }
+        // Rebuild AudioTrack to guarantee clean playback state
+        Log.i("AudioBridge", "stopTX: rebuilding AudioTrack, restoring volume to $savedVolume")
+        synchronized(pendingPcm) {
+            try {
+                audioTrack?.stop()
+                audioTrack?.release()
+            } catch (_: Exception) {}
+            audioTrack = null
+            setupAudioTrack()
+            audioTrack?.setVolume(savedVolume)
         }
     }
 

@@ -2,6 +2,7 @@ package com.rcforb.android.ui.radio
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -279,14 +280,42 @@ fun RadioScreen(vm: ConnectionManagerViewModel) {
                         CompactMessagesPanel(radio)
                     }
 
-                    // PTT
-                    PTTButton(isPTT) { on ->
-                        if (on && !hasMicPermission) {
-                            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            return@PTTButton
+                    // Request Tune + PTT
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(120.dp)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(AppColors.MetalDarkTop)
+                                .border(1.dp, AppColors.MetalDarkBorder, RoundedCornerShape(10.dp))
+                                .noRippleClickable {
+                                    vm.sendCommand(CommandParser.chatMessage("May I tune the remote?"))
+                                    showChat = true
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text("Request Tune", color = AppColors.Cream, fontSize = AppColors.sp11, lineHeight = AppColors.sp11)
+                                if (si?.radioOpen == true) {
+                                    Text("(Again)", color = AppColors.MutedForeground, fontSize = AppColors.sp9, lineHeight = AppColors.sp9)
+                                }
+                            }
                         }
-                        isPTT = on
-                        vm.sendPTT(on)
+                        PTTButton(isPTT, modifier = Modifier.weight(1f)) { on ->
+                            if (on && !hasMicPermission) {
+                                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                return@PTTButton
+                            }
+                            isPTT = on
+                            vm.sendPTT(on)
+                        }
                     }
                 } ?: run {
                     Box(
@@ -532,12 +561,12 @@ private fun CompactMessagesPanel(rs: RadioStateData) {
 }
 
 @Composable
-private fun PTTButton(isPTT: Boolean, onPTT: (Boolean) -> Unit) {
+private fun PTTButton(isPTT: Boolean, modifier: Modifier = Modifier, onPTT: (Boolean) -> Unit) {
     val shape = RoundedCornerShape(10.dp)
     val bgColor = if (isPTT) Color(0xFFCC3322) else Color(0xFF7A2222)
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(44.dp)
             .clip(shape)
@@ -565,12 +594,14 @@ private fun PTTButton(isPTT: Boolean, onPTT: (Boolean) -> Unit) {
 @Composable
 private fun ChatSidebar(vm: ConnectionManagerViewModel) {
     val chatMessages by vm.chatMessages.collectAsState()
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
     Column(
         modifier = Modifier
             .width(260.dp)
             .fillMaxHeight()
             .background(AppColors.ChatBg)
+            .imePadding()
     ) {
         Text(
             text = "Chat",
@@ -618,28 +649,38 @@ private fun ChatSidebar(vm: ConnectionManagerViewModel) {
             modifier = Modifier.fillMaxWidth().padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            androidx.compose.material3.OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                placeholder = { Text("Message...", color = AppColors.LabelDim, fontSize = AppColors.sp11) },
-                singleLine = true,
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = AppColors.Cream,
-                    unfocusedTextColor = AppColors.Cream,
-                    focusedBorderColor = AppColors.BtnBorder,
-                    unfocusedBorderColor = AppColors.MetalDarkBorder,
-                    focusedContainerColor = AppColors.InputBgTop,
-                    unfocusedContainerColor = AppColors.InputBgTop,
-                    cursorColor = AppColors.Cream
-                ),
-                modifier = Modifier.weight(1f).height(36.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(AppColors.InputBg)
+                    .border(1.dp, AppColors.Border, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (input.isEmpty()) {
+                    Text("Message...", color = AppColors.LabelDim, fontSize = AppColors.sp12)
+                }
+                androidx.compose.foundation.text.BasicTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = AppColors.Cream,
+                        fontSize = AppColors.sp12
+                    ),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(AppColors.Cream),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             MetalButton(title = "Send", isOn = false, height = 36.dp, fontSize = AppColors.sp11) {
                 val text = input.trim()
                 if (text.isNotEmpty()) {
                     vm.sendCommand(CommandParser.chatMessage(text))
                     input = ""
                 }
+                focusManager.clearFocus()
             }
         }
     }
