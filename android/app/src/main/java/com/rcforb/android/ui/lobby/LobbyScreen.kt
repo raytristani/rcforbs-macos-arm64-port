@@ -110,10 +110,9 @@ fun LobbyScreen(vm: ConnectionManagerViewModel) {
             }
 
             MetalButton(
-                title = "\u2764",
+                title = "My Stations",
                 isOn = showFavorites,
-                fontSize = AppColors.sp13,
-                height = 26.dp
+                fontSize = AppColors.sp12
             ) {
                 showFavorites = !showFavorites
                 if (showFavorites) favorites = FavoritesStore.load(context)

@@ -18,6 +18,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ConnectionManagerViewModel : ViewModel() {
+    override fun onCleared() {
+        super.onCleared()
+        disconnect()
+    }
+
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
 
@@ -295,6 +300,9 @@ class ConnectionManagerViewModel : ViewModel() {
 
         if (command.startsWith("post::") || command.startsWith("chat::") ||
             command.startsWith("mem::") || command.startsWith("log::")) {
+            if (command.startsWith("chat::")) {
+                Log.d("Chat", "Received: ${command.take(100)}")
+            }
             val chatMsg = serverInfo.processCommand(command)
             _serverInfoData.value = serverInfo.toData()
             if (chatMsg != null) {

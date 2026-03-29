@@ -20,14 +20,24 @@ import com.rcforb.android.ui.lobby.LobbyScreen
 import com.rcforb.android.ui.radio.RadioScreen
 
 class MainActivity : ComponentActivity() {
+    private var vm: ConnectionManagerViewModel? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             RCForbTheme {
-                val vm: ConnectionManagerViewModel = viewModel()
-                RCForbApp(vm)
+                val viewModel: ConnectionManagerViewModel = viewModel()
+                vm = viewModel
+                RCForbApp(viewModel)
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isFinishing) {
+            vm?.disconnect()
         }
     }
 }

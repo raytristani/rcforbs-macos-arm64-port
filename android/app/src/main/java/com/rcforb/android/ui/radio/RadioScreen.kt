@@ -28,6 +28,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import com.rcforb.android.models.RadioStateData
 import com.rcforb.android.models.RemoteStation
 import com.rcforb.android.models.ServerInfoData
@@ -66,6 +71,12 @@ fun RadioScreen(vm: ConnectionManagerViewModel) {
     var isFavorite by remember(connectedStation) {
         mutableStateOf(connectedStation?.let { FavoritesStore.isFavorite(context, it.serverId) } ?: false)
     }
+    var hasMicPermission by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+    }
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> hasMicPermission = granted }
 
     Column(modifier = Modifier.fillMaxSize().background(AppColors.DarkPanel)) {
         // Top Bar
@@ -270,6 +281,10 @@ fun RadioScreen(vm: ConnectionManagerViewModel) {
 
                     // PTT
                     PTTButton(isPTT) { on ->
+                        if (on && !hasMicPermission) {
+                            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            return@PTTButton
+                        }
                         isPTT = on
                         vm.sendPTT(on)
                     }
@@ -314,14 +329,7 @@ private fun TopBar(
         MetalButton(title = "Disconnect", isOn = false, fontSize = AppColors.sp11, height = 20.dp) { vm.disconnect() }
         MetalButton(title = "Reset", isOn = false, fontSize = AppColors.sp11, height = 20.dp) { vm.clearSliderOverrides() }
 
-        Text(
-            text = if (isFavorite) "\u2764" else "\u2661",
-            color = if (isFavorite) AppColors.LedRed else AppColors.MutedForeground,
-            fontSize = AppColors.sp18,
-            modifier = Modifier
-                .noRippleClickable { onToggleFavorite() }
-                .padding(horizontal = 4.dp)
-        )
+        MetalButton(title = if (isFavorite) "Saved Station" else "Save Station", isOn = isFavorite, fontSize = AppColors.sp11, height = 20.dp) { onToggleFavorite() }
 
         Text("Vol", color = AppColors.MutedForeground, fontSize = AppColors.sp10)
         CompactSlider(
@@ -586,18 +594,22 @@ private fun ChatSidebar(vm: ConnectionManagerViewModel) {
                 .padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            chatMessages.forEach { msg ->
-                if (msg.isSystem) {
-                    Text(msg.text, color = AppColors.MutedForeground, fontSize = AppColors.sp11)
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("${msg.user}:", color = AppColors.Cream, fontSize = AppColors.sp11, fontWeight = FontWeight.Bold)
-                        Text(msg.text, color = AppColors.CreamDark, fontSize = AppColors.sp11)
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    chatMessages.forEach { msg ->
+                        if (msg.isSystem) {
+                            Text(msg.text, color = AppColors.MutedForeground, fontSize = AppColors.sp11)
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("${msg.user}:", color = AppColors.Cream, fontSize = AppColors.sp11, fontWeight = FontWeight.Bold)
+                                Text(msg.text, color = AppColors.CreamDark, fontSize = AppColors.sp11)
+                            }
+                        }
+                    }
+                    if (chatMessages.isEmpty()) {
+                        Text("No messages yet", color = AppColors.MutedForeground.copy(alpha = 0.6f), fontSize = AppColors.sp11)
                     }
                 }
-            }
-            if (chatMessages.isEmpty()) {
-                Text("No messages yet", color = AppColors.MutedForeground.copy(alpha = 0.6f), fontSize = AppColors.sp11)
             }
         }
 
@@ -622,7 +634,7 @@ private fun ChatSidebar(vm: ConnectionManagerViewModel) {
                 ),
                 modifier = Modifier.weight(1f).height(36.dp)
             )
-            MetalButton(title = "Send", isOn = false, height = 20.dp, fontSize = AppColors.sp11) {
+            MetalButton(title = "Send", isOn = false, height = 36.dp, fontSize = AppColors.sp11) {
                 val text = input.trim()
                 if (text.isNotEmpty()) {
                     vm.sendCommand(CommandParser.chatMessage(text))
