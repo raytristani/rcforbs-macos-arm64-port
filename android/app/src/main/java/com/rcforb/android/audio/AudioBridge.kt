@@ -160,13 +160,13 @@ class AudioBridge {
         val txSampleRate = if (codecType == CodecType.SPEEX) 8000 else sampleRate
         val txFrame = if (codecType == CodecType.SPEEX) 160 else txFrameSize
 
-        val bufSize = AudioRecord.getMinBufferSize(
-            txSampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-
         try {
+            try { audioRecord?.release() } catch (_: Exception) {}
+            val bufSize = AudioRecord.getMinBufferSize(
+                txSampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
                 txSampleRate,
@@ -174,12 +174,18 @@ class AudioBridge {
                 AudioFormat.ENCODING_PCM_16BIT,
                 bufSize.coerceAtLeast(txFrame * 2 * 4)
             )
+            Log.i("AudioBridge", "AudioRecord created: state=${audioRecord?.state}, rate=$txSampleRate, frame=$txFrame")
             audioRecord?.startRecording()
 
             txJob = audioScope.launch {
                 val buffer = ByteArray(txFrame * 2) // Int16 = 2 bytes per sample
+                var readCount = 0
                 while (isTXActive) {
                     val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
+                    readCount++
+                    if (readCount <= 3) {
+                        Log.i("AudioBridge", "TX read #$readCount: $read bytes (expected ${buffer.size}), recordState=${audioRecord?.recordingState}")
+                    }
                     if (read == buffer.size) {
                         val encoded = if (codecType == CodecType.OPUS) {
                             opusEncoder?.encode(buffer)
@@ -187,10 +193,7 @@ class AudioBridge {
                             speexEncoder?.encode(buffer)
                         }
                         if (encoded != null) {
-                            Log.d("AudioBridge", "TX: encoded ${encoded.size} bytes, callback=${onEncodedAudio != null}")
                             onEncodedAudio?.invoke(encoded)
-                        } else {
-                            Log.w("AudioBridge", "TX: encoder returned null (codec=$codecType)")
                         }
                     }
                 }

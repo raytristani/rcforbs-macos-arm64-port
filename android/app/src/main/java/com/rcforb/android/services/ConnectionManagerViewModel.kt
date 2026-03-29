@@ -246,8 +246,8 @@ class ConnectionManagerViewModel : ViewModel() {
 
     private fun getTXButton(): String? {
         val buttons = _radioStateData.value?.buttons ?: return null
-        if ("TXd" in buttons) return "TXd"
         if ("TX" in buttons) return "TX"
+        if ("TXd" in buttons) return "TXd"
         return null
     }
 

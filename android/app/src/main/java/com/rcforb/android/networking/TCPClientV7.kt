@@ -28,20 +28,25 @@ class TCPClientV7(private val voipPort: Int) {
     var onDisconnected: (() -> Unit)? = null
 
     private var dataFlowContinuation: CancellableContinuation<Boolean>? = null
+    private var sessionId: String = ""
 
     val isConnected: Boolean get() = isConnectedFlag
 
     suspend fun connect(host: String, port: Int): Boolean = withContext(Dispatchers.IO) {
         try {
+            Log.i("TCPv7", "Connecting cmd=$host:$port audio=$host:$voipPort")
             val cmd = Socket(host, port)
             cmd.soTimeout = 500
+            cmd.tcpNoDelay = true
             cmdSocket = cmd
             cmdOut = cmd.getOutputStream()
 
             val audio = Socket(host, voipPort)
             audio.soTimeout = 500
+            audio.tcpNoDelay = true
             audioSocket = audio
             audioOut = audio.getOutputStream()
+            Log.i("TCPv7", "Both sockets connected. Audio local=${audio.localPort}")
 
             isConnectedFlag = true
             lastServerData = System.currentTimeMillis()
@@ -92,48 +97,52 @@ class TCPClientV7(private val voipPort: Int) {
     }
 
     fun sendPTT(on: Boolean) {
-        Log.d("TCPv7", "sendPTT($on) audioOut=${audioOut != null}")
+        if (on) txPacketCount = 0
         if (on) {
-            // Send "PTT" string on audio channel with type=1 header (matches C# SendDataPacket)
+            // Send "PTT" as single packet matching C# SendDataPacket("PTT"): type=1
             val out = audioOut ?: return
             try {
-                val pttBytes = "PTT".toByteArray(Charsets.US_ASCII)
-                val header = ByteBuffer.allocate(10).order(ByteOrder.LITTLE_ENDIAN)
-                header.putInt(pttBytes.size)
-                header.put(1) // type=1 for PTT
-                header.put(ByteArray(5))
-                out.write(header.array())
-                out.write(pttBytes)
-                out.flush()
+                val pttStr = "PTT".toByteArray(Charsets.US_ASCII)
+                val packet = ByteArray(10 + pttStr.size)
+                val lenBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(pttStr.size).array()
+                System.arraycopy(lenBytes, 0, packet, 0, 4)
+                packet[4] = 1 // type=1 for PTT control
+                // bytes 5-9 already zero
+                System.arraycopy(pttStr, 0, packet, 10, pttStr.size)
+                out.write(packet)
             } catch (_: Exception) {}
         }
-        // V7: PTT off is detected by server when audio stops flowing — no explicit off packet
     }
 
+    private var txPacketCount = 0
     fun sendAudio(data: ByteArray) {
-        Log.d("TCPv7", "sendAudio: ${data.size} bytes")
-        val out = audioOut ?: run {
-            Log.w("TCPv7", "sendAudio: audioOut is null!")
-            return
-        }
+        val out = audioOut ?: return
         try {
-            val header = ByteBuffer.allocate(10).order(ByteOrder.LITTLE_ENDIAN)
-            header.putInt(data.size)
-            header.put(2) // type=2 for audio/data
-            header.put(ByteArray(5))
-            out.write(header.array())
-            out.write(data)
+            // Single write matching C# SendAudioPacket: [4-byte length][type=2][5 zeros][audio data]
+            val packet = ByteArray(10 + data.size)
+            val lenBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(data.size).array()
+            System.arraycopy(lenBytes, 0, packet, 0, 4)
+            packet[4] = 2 // type=2 for audio
+            // bytes 5-9 already zero
+            System.arraycopy(data, 0, packet, 10, data.size)
+            txPacketCount++
+            if (txPacketCount <= 3) {
+                Log.i("TCPv7", "TX packet #$txPacketCount: total=${packet.size} header=[${packet[0]},${packet[1]},${packet[2]},${packet[3]},${packet[4]},${packet[5]},${packet[6]},${packet[7]},${packet[8]},${packet[9]}] audioLen=${data.size}")
+            }
+            out.write(packet)
             out.flush()
-        } catch (e: Exception) {
-            Log.e("TCPv7", "sendAudio failed: ${e.message}")
-        }
+        } catch (_: Exception) {}
     }
 
     fun sendSessionLogin(user: String, passwordMD5: String) {
+        sessionId = "${user.lowercase()},$passwordMD5"
+        sendSessionLogin(sessionId)
+    }
+
+    private fun sendSessionLogin(sid: String) {
         val out = audioOut ?: return
         try {
-            val sessionStr = "${user.lowercase()},$passwordMD5"
-            val strBytes = sessionStr.toByteArray(Charsets.US_ASCII)
+            val strBytes = sid.toByteArray(Charsets.US_ASCII)
             val buf = ByteBuffer.allocate(64).order(ByteOrder.LITTLE_ENDIAN)
             buf.putInt(54)
             buf.putInt(strBytes.size)
@@ -224,6 +233,11 @@ class TCPClientV7(private val voipPort: Int) {
             }
             if (payloadLen == 54) {
                 if (audioBuffer.size < 62) break
+                // Server session challenge — resend our session credentials
+                Log.i("TCPv7", "Received session challenge, resending session ID")
+                if (sessionId.isNotEmpty()) {
+                    sendSessionLogin(sessionId)
+                }
                 audioBuffer = audioBuffer.copyOfRange(62, audioBuffer.size)
                 continue
             }
