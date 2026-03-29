@@ -7,6 +7,9 @@ DerivedData/
 *.xcuserstate
 *.xcscmblueprint
 *.xccheckout
+*.swiftdeps
+*.dia
+*.d
 
 # Swift Package Manager
 .build/
@@ -37,6 +40,13 @@ Carthage/Checkouts/
 # macOS app distribution
 *.dmg
 *.pkg
+
+# Android / Gradle
+.gradle/
+.kotlin/
+local.properties
+*.apk
+*.aab
 
 # IDE
 *.swp
