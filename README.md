@@ -97,7 +97,8 @@ Chat panel for real-time communication with other operators on the station.
 
 Download the latest pre-built ZIP archive from `dist/macos/`:
 
-- **[RCForb Client-1.0.6-arm64-20260328-160200.zip](dist/macos/RCForb%20Client-1.0.6-arm64-20260328-160200.zip)** (latest)
+- **[RCForb Client-1.0.8-arm64-20260329-212055.zip](dist/macos/RCForb%20Client-1.0.8-arm64-20260329-212055.zip)** (latest)
+- `RCForb Client-1.0.6-arm64-20260328-160200.zip`
 - `RCForb Client-1.0.5-arm64-20260328-131948.zip`
 - `RCForb Client-1.0.4-arm64-20260328-092834.zip`
 - `RCForb Client-1.0.3-arm64.zip`
