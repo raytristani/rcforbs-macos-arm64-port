@@ -2,8 +2,11 @@ package com.rcforb.android.ui.lobby
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -13,12 +16,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rcforb.android.models.RemoteStation
 import com.rcforb.android.services.ConnectionManagerViewModel
@@ -109,6 +116,17 @@ fun LobbyScreen(vm: ConnectionManagerViewModel) {
                 }
             }
 
+            Box(modifier = Modifier.alpha(if (selectedId != null) 1f else 0.5f)) {
+                MetalButton(
+                    title = "Connect",
+                    isOn = false,
+                    style = MetalButtonStyle.LIGHT
+                ) {
+                    val station = filtered.find { it.serverId == selectedId }
+                    if (station != null) vm.connectToStation(station)
+                }
+            }
+
             MetalButton(
                 title = "My Stations",
                 isOn = showFavorites,
@@ -123,52 +141,15 @@ fun LobbyScreen(vm: ConnectionManagerViewModel) {
 
         // Main content with optional favorites sidebar
         Row(modifier = Modifier.weight(1f)) {
-            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                // Column headers
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppColors.Card)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Station", color = AppColors.LabelMuted, fontSize = AppColors.sp10, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Radio", color = AppColors.LabelMuted, fontSize = AppColors.sp10, fontWeight = FontWeight.Bold, modifier = Modifier.width(100.dp))
-                    Text("Country", color = AppColors.LabelMuted, fontSize = AppColors.sp10, fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp))
-                    Text("Grid", color = AppColors.LabelMuted, fontSize = AppColors.sp10, fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp))
-                    Text("Proto", color = AppColors.LabelMuted, fontSize = AppColors.sp10, fontWeight = FontWeight.Bold, modifier = Modifier.width(38.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-
-                // Station list
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth()
-                ) {
-                items(filtered, key = { it.serverId }) { station ->
-                    StationRow(
-                        station = station,
-                        isSelected = selectedId == station.serverId,
-                        onSelect = { selectedId = station.serverId },
-                        onConnect = { vm.connectToStation(station) }
-                    )
-                }
-
-                if (filtered.isEmpty() && !loading) {
-                    item {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (stations.isEmpty()) "No stations online" else "No matching stations",
-                                color = AppColors.LabelSubtle.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
-                }
-            }
-            } // end Column wrapping headers + list
+            StationTable(
+                stations = filtered,
+                isEmpty = filtered.isEmpty() && !loading,
+                allEmpty = stations.isEmpty(),
+                selectedId = selectedId,
+                onSelect = { selectedId = it },
+                onConnect = { vm.connectToStation(it) },
+                modifier = Modifier.weight(1f).fillMaxHeight()
+            )
 
             // Favorites sidebar
             if (showFavorites) {
@@ -368,58 +349,156 @@ private fun FavoriteStationCard(
 }
 
 @Composable
-private fun StationRow(
-    station: RemoteStation,
-    isSelected: Boolean,
-    onSelect: () -> Unit,
-    onConnect: () -> Unit
+private fun StationTable(
+    stations: List<RemoteStation>,
+    isEmpty: Boolean,
+    allEmpty: Boolean,
+    selectedId: String?,
+    onSelect: (String) -> Unit,
+    onConnect: (RemoteStation) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isSelected) AppColors.CreamDark else Color.Transparent
-    val textColor = if (isSelected) AppColors.TextDark else AppColors.Cream
+    val density = LocalDensity.current
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(bgColor)
-            .noRippleClickable { onSelect() }
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(station.serverName, color = textColor, fontSize = AppColors.sp13, fontWeight = FontWeight.Medium)
-            if (station.description.isNotEmpty()) {
-                Text(
-                    station.description,
-                    color = textColor.copy(alpha = 0.6f),
-                    fontSize = AppColors.sp11,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+    val evenRowBg = AppColors.SurfaceDark
+    val oddRowBg = AppColors.DarkPanel
+
+    // Fixed column widths (all except Station which fills remaining space)
+    // Indices: 0=Radio, 1=Country, 2=Grid, 3=Ver, 4=Proto
+    val fixedColWidths = remember {
+        mutableStateListOf(100.dp, 100.dp, 70.dp, 110.dp, 50.dp)
+    }
+    val fixedColNames = listOf("Radio", "Country", "Grid", "Ver", "Proto")
+    val fixedColMins = listOf(60.dp, 50.dp, 40.dp, 60.dp, 40.dp)
+
+    Column(modifier = modifier) {
+        // Header row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(AppColors.Card)
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Station header — fills remaining space
+            Box(
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text("Station", color = AppColors.LabelMuted, fontSize = AppColors.sp10, fontWeight = FontWeight.Bold)
+            }
+            // Divider + fixed columns
+            fixedColNames.forEachIndexed { i, name ->
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(20.dp)
+                        .background(AppColors.Border)
+                        .pointerInput(i) {
+                            detectHorizontalDragGestures { _, dragAmount ->
+                                val deltaDp = with(density) { dragAmount.toDp() }
+                                val newWidth = fixedColWidths[i] + deltaDp
+                                if (newWidth >= fixedColMins[i]) {
+                                    fixedColWidths[i] = newWidth
+                                }
+                            }
+                        }
+                        .padding(horizontal = 4.dp)
                 )
+                Box(
+                    modifier = Modifier.width(fixedColWidths[i]).padding(horizontal = 4.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(name, color = AppColors.LabelMuted, fontSize = AppColors.sp10, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
             }
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(station.radioModel, color = textColor, fontSize = AppColors.sp12, modifier = Modifier.width(100.dp))
-        Text(station.country, color = textColor, fontSize = AppColors.sp12, modifier = Modifier.width(80.dp))
-        Text(station.gridSquare, color = textColor, fontSize = AppColors.sp12, modifier = Modifier.width(60.dp))
 
-        // Protocol badge
-        val badgeColor = if (station.isV7) AppColors.LedRed else AppColors.LedGreen
-        Text(
-            text = if (station.isV7) "V7" else "V10",
-            color = AppColors.Cream,
-            fontSize = AppColors.sp11,
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(badgeColor)
-                .padding(horizontal = 8.dp, vertical = 2.dp)
-        )
+        // Station rows
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            itemsIndexed(stations, key = { _, s -> s.serverId }) { index, station ->
+                val isSelected = selectedId == station.serverId
+                val bgColor = when {
+                    isSelected -> AppColors.CreamDark
+                    index % 2 == 0 -> evenRowBg
+                    else -> oddRowBg
+                }
+                val textColor = if (isSelected) AppColors.TextDark else AppColors.Cream
+                val mutedTextColor = if (isSelected) AppColors.TextDark.copy(alpha = 0.7f) else AppColors.MutedForeground
 
-        Spacer(modifier = Modifier.width(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(bgColor)
+                        .noRippleClickable { onSelect(station.serverId) }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Station — fills remaining space
+                    Column(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
+                        Text(
+                            station.serverName,
+                            color = textColor,
+                            fontSize = AppColors.sp13,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (station.description.isNotEmpty()) {
+                            Text(
+                                station.description,
+                                color = mutedTextColor,
+                                fontSize = AppColors.sp11,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    // Radio
+                    Text(station.radioModel, color = textColor, fontSize = AppColors.sp12, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(fixedColWidths[0]).padding(horizontal = 4.dp))
+                    // Country
+                    Text(station.country, color = textColor, fontSize = AppColors.sp12, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(fixedColWidths[1]).padding(horizontal = 4.dp))
+                    // Grid
+                    Text(station.gridSquare, color = textColor, fontSize = AppColors.sp12, maxLines = 1,
+                        modifier = Modifier.width(fixedColWidths[2]).padding(horizontal = 4.dp))
+                    // Version
+                    Text(station.serverVersion, color = textColor, fontSize = AppColors.sp12, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(fixedColWidths[3]).padding(horizontal = 4.dp))
+                    // Proto badge
+                    Box(
+                        modifier = Modifier.width(fixedColWidths[4]).padding(horizontal = 4.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            text = if (station.isV7) "V7" else "V10",
+                            color = AppColors.Cream,
+                            fontSize = AppColors.sp11,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (station.isV7) AppColors.LedRed else AppColors.LedGreen)
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
 
-        // Connect button (replaces double-click)
-        if (isSelected) {
-            MetalButton(title = "Connect", isOn = false, style = MetalButtonStyle.LIGHT) {
-                onConnect()
+            if (isEmpty) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (allEmpty) "No stations online" else "No matching stations",
+                            color = AppColors.LabelSubtle.copy(alpha = 0.5f)
+                        )
+                    }
+                }
             }
         }
     }

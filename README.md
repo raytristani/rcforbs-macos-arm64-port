@@ -203,6 +203,24 @@ RCForb uses a custom protocol over UDP (V10, Opus audio) or TCP (V7, Speex audio
 
 ## Changelog
 
+### v1.0.8 (2026-03-29)
+
+**macOS — Full Android Parity:**
+- **Color parity** — All hardcoded hex colors replaced with semantic tokens matching Android AppColors exactly. Every component cross-referenced against Android source.
+- **Selection highlight** — NSTableView row selection swizzled to cream (#ECEADE) instead of system blue. Selected row text inverts to dark for readability.
+- **Lobby UX** — Connect button in header, double-click to connect via NSTableView hook, alternating row backgrounds.
+- **PTT fixes** — TX button priority corrected (TX before TXd), server PTT grant/revoke now starts/stops audio bridge, control bytes sent on background thread, playback engine rebuilt on stopTX. Matches Android flow exactly.
+- **Mic test** — Standalone record/playback engines (no dependency on RX audio), Speex round-trip encode/decode, OK/FAIL indicator button.
+- **VFO knob** — Local frequency accumulation during drag (no duplicates or bouncing), sensitivity matched to Android (delta/25).
+- **Sliders** — Compact 4-column grid with smaller value badges, tick marks removed.
+- **Panels** — Mode & Filters stretches to match Controls height, scrollable content.
+- **Login** — Card, input, biometric button, and error colors matched to Android.
+- **Window** — Opens at 1395x833 instead of fullscreen, single instance enforced.
+
+**Android:**
+- **Lobby table** — Proper table layout with static header row, column dividers, resizable columns via drag, alternating row colors (dark/slightly lighter dark), Version column added. Connect button in header.
+- **VFO knob** — Local frequency accumulation during drag eliminates duplicate commands and frequency bouncing from stale server state.
+
 ### v1.0.7 (2026-03-29)
 
 **Android:**

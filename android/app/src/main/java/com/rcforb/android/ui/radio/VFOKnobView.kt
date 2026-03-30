@@ -50,6 +50,10 @@ fun VFOKnobView(
                         )
                     ).toFloat()
 
+                    // Accumulate frequency locally during this gesture
+                    var dragFreq = freqRef.value
+                    var lastSentFreq = dragFreq
+
                     do {
                         val event = awaitPointerEvent()
                         val pointer = event.changes.firstOrNull() ?: break
@@ -73,9 +77,10 @@ fun VFOKnobView(
 
                         val steps = (delta / 25).roundToInt()
                         if (steps != 0) {
-                            val newFreq = freqRef.value + steps * stepRef.value
-                            if (newFreq > 0) {
-                                callbackRef.value(newFreq)
+                            dragFreq += steps * stepRef.value
+                            if (dragFreq > 0 && dragFreq != lastSentFreq) {
+                                lastSentFreq = dragFreq
+                                callbackRef.value(dragFreq)
                             }
                         }
 
