@@ -134,10 +134,16 @@ class ConnectionManagerViewModel : ViewModel() {
                 audioBridge.onEncodedAudio = { data -> tcpClient?.sendAudio(data) }
             }
 
+            // Match C# client connection sequence exactly:
+            // 1. "get id" (C# sends this immediately after connect)
+            // 2. login command on cmd socket
+            // 3. session login on audio socket (C# does this inside SendCommandString)
+            // 4. set protocol and request state
+            sendCommand("get id")
             sendCommand(CommandParser.loginCmd(username, passwordMD5))
-            // Session login on audio socket AFTER login command on cmd socket
-            // (matches C# client timing where SendCommandString triggers SendSessionID)
-            tcpClient?.sendSessionLogin(username, passwordMD5)
+            withContext(Dispatchers.IO) {
+                tcpClient?.sendSessionLogin(username, passwordMD5)
+            }
             sendCommand(CommandParser.setProtocolRCS())
             sendCommand(CommandParser.requestRadioState())
 

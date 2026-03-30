@@ -162,10 +162,10 @@ class AudioBridge {
         audioTrack?.setVolume(0.05f)
 
         // Speex uses 8kHz mic, Opus uses 48kHz
-        // Send 1 frame per packet — server should accept any valid Speex frame
+        // Match TX frame count to server's RX frame count for compatibility
         val txSampleRate = if (codecType == CodecType.SPEEX) 8000 else sampleRate
-        val txFrame = if (codecType == CodecType.SPEEX) 160 else txFrameSize
-        Log.i("AudioBridge", "TX config: rate=$txSampleRate, samplesPerPacket=$txFrame (1 frame)")
+        val txFrame = if (codecType == CodecType.SPEEX) 160 * rxSpeexFrameCount else txFrameSize
+        Log.i("AudioBridge", "TX config: rate=$txSampleRate, samplesPerPacket=$txFrame ($rxSpeexFrameCount frames)")
 
         try {
             try { audioRecord?.release() } catch (_: Exception) {}

@@ -117,6 +117,7 @@ class TCPClientV7(private val voipPort: Int) {
     }
 
     private var txPacketCount = 0
+    private var audioRecvCount = 0
     fun sendAudio(data: ByteArray) {
         val out = audioOut ?: return
         try {
@@ -142,18 +143,25 @@ class TCPClientV7(private val voipPort: Int) {
     }
 
     private fun sendSessionLogin(sid: String) {
-        val out = audioOut ?: return
+        val out = audioOut ?: run {
+            Log.w("TCPv7", "sendSessionLogin: audioOut is null!")
+            return
+        }
         try {
             val strBytes = sid.toByteArray(Charsets.US_ASCII)
             val buf = ByteBuffer.allocate(64).order(ByteOrder.LITTLE_ENDIAN)
             buf.putInt(54)
             buf.putInt(strBytes.size)
             buf.put(strBytes)
-            // Pad remaining
             val remaining = 64 - 8 - strBytes.size
             if (remaining > 0) buf.put(ByteArray(remaining))
-            out.write(buf.array())
-        } catch (_: Exception) {}
+            val packet = buf.array()
+            Log.i("TCPv7", "Sending session login: ${sid.take(20)}... (${packet.size} bytes) first10=[${packet.take(10).joinToString(",") { (it.toInt() and 0xFF).toString() }}]")
+            out.write(packet)
+            out.flush()
+        } catch (e: Exception) {
+            Log.e("TCPv7", "sendSessionLogin failed: ${e.message}", e)
+        }
     }
 
     private fun startCmdReceive() {
@@ -208,6 +216,10 @@ class TCPClientV7(private val voipPort: Int) {
                 try {
                     val len = input.read(buf)
                     if (len > 0) {
+                        if (audioRecvCount < 5) {
+                            audioRecvCount++
+                            Log.d("TCPv7", "Audio recv #$audioRecvCount: $len bytes, first4=[${buf.take(4).joinToString(",") { (it.toInt() and 0xFF).toString() }}]")
+                        }
                         processAudioData(buf.copyOfRange(0, len))
                     } else if (len == -1) {
                         break
@@ -234,13 +246,21 @@ class TCPClientV7(private val voipPort: Int) {
                 continue
             }
             if (payloadLen == 54) {
-                if (audioBuffer.size < 62) break
-                // Server session challenge — resend our session credentials
-                Log.i("TCPv7", "Received session challenge, resending session ID")
+                if (audioBuffer.size < 64) break
+                // Server session echo — resend our session credentials if needed
+                Log.i("TCPv7", "Received session packet (64 bytes)")
                 if (sessionId.isNotEmpty()) {
-                    sendSessionLogin(sessionId)
+                    // Check if server's session matches ours
+                    val serverStrLen = ByteBuffer.wrap(audioBuffer, 4, 4).order(ByteOrder.LITTLE_ENDIAN).int
+                    val serverSid = String(audioBuffer, 8, serverStrLen.coerceAtMost(54), Charsets.US_ASCII)
+                    if (serverSid != sessionId) {
+                        Log.i("TCPv7", "Session mismatch: server='$serverSid' ours='$sessionId', resending")
+                        sendSessionLogin(sessionId)
+                    } else {
+                        Log.i("TCPv7", "Session confirmed: '$serverSid'")
+                    }
                 }
-                audioBuffer = audioBuffer.copyOfRange(62, audioBuffer.size)
+                audioBuffer = audioBuffer.copyOfRange(64, audioBuffer.size)
                 continue
             }
             if (payloadLen < 0 || payloadLen > 8192) {
