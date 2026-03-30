@@ -24,7 +24,9 @@ struct RadioView: View {
     @State private var isPTT = false
     @State private var volume: Double = 0.5
     @State private var showFreqDialog = false
+    @State private var micTestResult: String?
     @State private var freqDialogVFO: String = "A"
+    @State private var isFavorite = false
 
     private var rs: RadioStateData? { cm.radioStateData }
     private var si: ServerInfoData? { cm.serverInfoData }
@@ -39,7 +41,12 @@ struct RadioView: View {
                 }
             }
         }
-        .background(Color(hex: "#33332a"))
+        .background(Color.background)
+        .onAppear {
+            if let station = cm.connectedStation {
+                isFavorite = FavoritesStore.isFavorite(station.serverId)
+            }
+        }
     }
 
     // MARK: - Top Bar
@@ -53,7 +60,28 @@ struct RadioView: View {
                 cm.sliderOverrides.removeAll()
             }
 
-            Text("Vol").font(.system(size: 11)).foregroundColor(Color(hex: "#777777"))
+            MetalButton(title: isFavorite ? "Saved Station" : "Save Station", isOn: isFavorite, fontSize: 12) {
+                if let station = cm.connectedStation {
+                    let fav = FavoriteStation(
+                        serverId: station.serverId,
+                        serverName: station.serverName,
+                        radioModel: station.radioModel,
+                        description: station.description,
+                        host: station.host,
+                        port: station.port,
+                        voipPort: station.voipPort,
+                        isV7: station.isV7
+                    )
+                    if isFavorite {
+                        FavoritesStore.removeFavorite(station.serverId)
+                    } else {
+                        FavoritesStore.addFavorite(fav)
+                    }
+                    isFavorite.toggle()
+                }
+            }
+
+            Text("Vol").font(.system(size: 11)).foregroundColor(.mutedForeground)
             Slider(value: $volume, in: 0...1, step: 0.05)
                 .frame(width: 60)
                 .tint(Color.cream)
@@ -65,15 +93,15 @@ struct RadioView: View {
 
             // Status LED
             Circle()
-                .fill(si?.radioOpen == true ? Color(hex: "#44cc44") : si?.radioInUse == true ? Color(hex: "#cc4444") : Color(hex: "#666666"))
+                .fill(si?.radioOpen == true ? Color(hex: "#44cc44") : si?.radioInUse == true ? Color(hex: "#cc4444") : .mutedForeground.opacity(0.6))
                 .frame(width: 6, height: 6)
                 .shadow(color: si?.radioOpen == true ? Color(hex: "#44cc44") : .clear, radius: 2)
 
             Text(si?.radioOpen == true ? "Open" : si?.radioInUse == true ? "In Use" : "Closed")
-                .font(.system(size: 11)).foregroundColor(Color(hex: "#888888"))
+                .font(.system(size: 11)).foregroundColor(.mutedForeground)
 
             Text(si?.serverTime ?? "")
-                .font(.system(size: 11)).foregroundColor(Color(hex: "#666666"))
+                .font(.system(size: 11)).foregroundColor(.mutedForeground.opacity(0.6))
 
             MetalButton(title: "Chat", isOn: showChat, fontSize: 12) {
                 showChat.toggle()
@@ -81,42 +109,88 @@ struct RadioView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 36)
-        .background(
-            LinearGradient(colors: [Color.panelBgTop, Color.panelBgBottom], startPoint: .top, endPoint: .bottom)
+        .background(Color.panelBgBottom)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(Color.border), alignment: .bottom)
+    }
+
+    private var requestTuneButton: some View {
+        Button {
+            cm.sendCommand(CommandParser.chatMessage("May I tune the remote?"))
+            showChat = true
+        } label: {
+            VStack(spacing: 2) {
+                Text("Request Tune")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color.cream)
+                if si?.radioOpen == true {
+                    Text("(Again)")
+                        .font(.system(size: 9))
+                        .foregroundColor(.mutedForeground)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(width: 120, height: 60)
+        .background(Color.metalDarkTop)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.metalDarkBorder, lineWidth: 2)
         )
-        .overlay(Rectangle().frame(height: 1).foregroundColor(Color(hex: "#555544")), alignment: .bottom)
+        .cornerRadius(10)
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+    }
+
+    private var micTestButton: some View {
+        Button {
+            micTestResult = "..."
+            cm.audioBridge.micTest { success in
+                micTestResult = success ? "OK" : "FAIL"
+            }
+        } label: {
+            Text(micTestResult == "..." ? "Testing..." : micTestResult != nil ? "Mic: \(micTestResult!)" : "Mic Test")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color.cream)
+        }
+        .buttonStyle(.plain)
+        .frame(width: 90, height: 60)
+        .background(micTestResult == nil ? Color.metalDarkTop : micTestResult == "OK" ? Color.ledGreen.opacity(0.3) : Color.ledRed.opacity(0.3))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.metalDarkBorder, lineWidth: 1)
+        )
+        .cornerRadius(10)
     }
 
     private var pttArea: some View {
-        VStack {
-            Text("PUSH TO TALK")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(isPTT ? .white : Color.cream)
-                .tracking(2)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 60)
-        .background(
-            LinearGradient(
-                colors: isPTT ? [Color(hex: "#ff6644"), Color(hex: "#cc3322")] : [Color(hex: "#cc4433"), Color(hex: "#882222")],
-                startPoint: .top, endPoint: .bottom
+        HStack(spacing: 8) {
+            requestTuneButton
+            micTestButton
+
+            VStack {
+                Text("PUSH TO TALK")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(isPTT ? .white : Color.cream)
+                    .tracking(2)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 60)
+            .background(isPTT ? Color(hex: "#CC3322") : Color(hex: "#7A2222"))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isPTT ? Color(hex: "#ff8866") : Color(hex: "#aa4433"), lineWidth: 2)
             )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isPTT ? Color(hex: "#ff8866") : Color(hex: "#aa4433"), lineWidth: 2)
-        )
-        .cornerRadius(6)
-        .shadow(color: isPTT ? Color(hex: "#ff4422").opacity(0.5) : .black.opacity(0.3), radius: isPTT ? 12 : 6, y: 2)
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPTT { isPTT = true; cm.sendPTT(true) }
-                }
-                .onEnded { _ in
-                    isPTT = false; cm.sendPTT(false)
-                }
-        )
+            .cornerRadius(10)
+            .shadow(color: isPTT ? Color(hex: "#ff4422").opacity(0.5) : .black.opacity(0.3), radius: isPTT ? 12 : 6, y: 2)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !isPTT { isPTT = true; cm.sendPTT(true) }
+                    }
+                    .onEnded { _ in
+                        isPTT = false; cm.sendPTT(false)
+                    }
+            )
+        }
     }
 
     // MARK: - Main Content
@@ -191,11 +265,9 @@ struct RadioView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(
-            LinearGradient(colors: [Color(hex: "#e8d888"), Color(hex: "#f0e4a0")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(hex: "#999870"), lineWidth: 2))
-        .cornerRadius(6)
+        .background(Color(hex: "#E8D888"))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "#999870"), lineWidth: 2))
+        .cornerRadius(10)
         .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
     }
 
@@ -214,18 +286,20 @@ struct RadioView: View {
 
     private func modeFiltersPanel(_ rs: RadioStateData) -> some View {
         PanelView(title: "Mode & Filters") {
-            VStack(spacing: 2) {
-                ForEach(rs.dropdownOrder, id: \.self) { name in
-                    if !name.isEmpty {
-                        let value = rs.dropdowns[name] ?? ""
-                        let opts = rs.dropdownLists[name] ?? []
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(name)
-                                .font(.system(size: 9))
-                                .foregroundColor(Color.labelDim)
-                                .lineSpacing(0)
-                            MetalDropdown(value: value, options: opts) { selected in
-                                cm.sendCommand(CommandParser.setDropdown(name, selected))
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(rs.dropdownOrder, id: \.self) { name in
+                        if !name.isEmpty {
+                            let value = rs.dropdowns[name] ?? ""
+                            let opts = rs.dropdownLists[name] ?? []
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(name)
+                                    .font(.system(size: 9))
+                                    .foregroundColor(Color.labelDim)
+                                    .lineSpacing(0)
+                                MetalDropdown(value: value, options: opts) { selected in
+                                    cm.sendCommand(CommandParser.setDropdown(name, selected))
+                                }
                             }
                         }
                     }
@@ -280,7 +354,7 @@ struct RadioView: View {
                             }
                             Text("VFO A")
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(Color(hex: "#aaaaaa"))
+                                .foregroundColor(.mutedForeground)
                                 .padding(.top, 4)
                         }
 
@@ -291,7 +365,7 @@ struct RadioView: View {
                                 }
                                 Text("VFO B")
                                     .font(.system(size: 12))
-                                    .foregroundColor(Color(hex: "#888888"))
+                                    .foregroundColor(.mutedForeground)
                                     .padding(.top, 4)
                             }
                         }
@@ -328,8 +402,8 @@ struct RadioView: View {
 
     private func slidersPanel(_ rs: RadioStateData) -> some View {
         PanelView(title: "Adjustments") {
-            let columns = [GridItem(.adaptive(minimum: 180), spacing: 12)]
-            LazyVGrid(columns: columns, spacing: 4) {
+            let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 4)
+            LazyVGrid(columns: columns, spacing: 2) {
                 ForEach(rs.sliderOrder, id: \.self) { name in
                     if !name.isEmpty {
                         let v = rs.sliders[name] ?? 0
@@ -337,25 +411,25 @@ struct RadioView: View {
                         let rMin = raw.min
                         let rMax = raw.max > raw.min ? raw.max : raw.min + 100
                         let rStep = raw.step > 0 ? raw.step : 1
-                        HStack(spacing: 4) {
+                        HStack(spacing: 2) {
                             Text(verbatim: "\(Int(v.rounded()))")
-                                .font(.system(size: 10))
+                                .font(.system(size: 9))
                                 .foregroundColor(Color.cream)
-                                .frame(width: 34, height: 20)
-                                .background(
-                                    LinearGradient(colors: [Color.metalDarkTop, Color.metalDarkBottom], startPoint: .top, endPoint: .bottom)
-                                )
-                                .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.metalDarkBorder, lineWidth: 1))
-                                .cornerRadius(3)
+                                .frame(width: 28)
+                                .frame(maxHeight: .infinity)
+                                .background(Color.metalDarkTop)
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.metalDarkBorder, lineWidth: 1))
+                                .cornerRadius(6)
 
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: 0) {
                                 Text(name)
                                     .font(.system(size: 9))
-                                    .foregroundColor(Color(hex: "#999999"))
+                                    .foregroundColor(.mutedForeground)
                                     .lineLimit(1)
                                 RadioSlider(name: name, serverValue: v, min: rMin, max: rMax, step: rStep) { val in
                                     cm.sendCommand(CommandParser.setSlider(name, String(Int(val))))
                                 }
+                                .frame(height: 16)
                             }
                         }
                     }
@@ -371,21 +445,19 @@ struct RadioView: View {
             HStack(spacing: 12) {
                 ForEach(rs.messageOrder, id: \.self) { name in
                     if !name.isEmpty {
-                        VStack(alignment: .trailing, spacing: 0) {
+                        VStack(spacing: 0) {
                             Text(rs.messages[name] ?? "")
                                 .font(.system(size: 11))
                                 .foregroundColor(Color.cream)
-                                .frame(minWidth: 60, alignment: .trailing)
+                                .frame(minWidth: 60)
                                 .frame(height: 20)
                                 .padding(.horizontal, 6)
-                                .background(
-                                    LinearGradient(colors: [Color.metalDarkTop, Color.metalDarkBottom], startPoint: .top, endPoint: .bottom)
-                                )
-                                .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.metalDarkBorder, lineWidth: 1))
-                                .cornerRadius(3)
+                                .background(Color.metalDarkTop)
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.metalDarkBorder, lineWidth: 1))
+                                .cornerRadius(8)
                             Text(name)
                                 .font(.system(size: 9))
-                                .foregroundColor(Color(hex: "#888888"))
+                                .foregroundColor(.mutedForeground)
                         }
                     }
                 }
@@ -398,7 +470,7 @@ struct RadioView: View {
     private var chatSidebar: some View {
         ChatView()
             .frame(width: 288)
-            .background(Color(hex: "#2a2a2a"))
-            .overlay(Rectangle().frame(width: 1).foregroundColor(Color(hex: "#555555")), alignment: .leading)
+            .background(Color.background)
+            .overlay(Rectangle().frame(width: 1).foregroundColor(Color.panelBorder), alignment: .leading)
     }
 }

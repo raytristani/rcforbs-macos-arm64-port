@@ -16,14 +16,12 @@ struct PanelView<Content: View>: View {
             content()
         }
         .padding(6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(colors: [Color.panelBgTop, Color.panelBgBottom], startPoint: .top, endPoint: .bottom)
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color.panelBgBottom)
         .overlay(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.panelBorder, lineWidth: 1)
         )
-        .cornerRadius(4)
+        .cornerRadius(10)
     }
 }

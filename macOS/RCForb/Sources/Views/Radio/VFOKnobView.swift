@@ -9,6 +9,9 @@ struct VFOKnobView: View {
 
     @State private var rotation: Double = 0
     @State private var lastAngle: Double? = nil
+    @State private var dragFreq: Int = 0
+    @State private var isDragging = false
+    @State private var lastSentFreq: Int = 0
 
     var body: some View {
         ZStack {
@@ -41,6 +44,12 @@ struct VFOKnobView: View {
                         value.location.x - center.x
                     ) * 180.0 / .pi
 
+                    if !isDragging {
+                        isDragging = true
+                        dragFreq = frequency
+                        lastSentFreq = frequency
+                    }
+
                     if let last = lastAngle {
                         var delta = angle - last
                         if delta > 180 { delta -= 360 }
@@ -48,11 +57,12 @@ struct VFOKnobView: View {
 
                         rotation += delta
 
-                        let steps = Int((delta / 10).rounded())
+                        let steps = Int((delta / 25).rounded())
                         if steps != 0 {
-                            let newFreq = frequency + steps * step
-                            if newFreq > 0 {
-                                onFrequencyChange(newFreq)
+                            dragFreq += steps * step
+                            if dragFreq > 0 && dragFreq != lastSentFreq {
+                                lastSentFreq = dragFreq
+                                onFrequencyChange(dragFreq)
                             }
                         }
                     }
@@ -60,6 +70,7 @@ struct VFOKnobView: View {
                 }
                 .onEnded { _ in
                     lastAngle = nil
+                    isDragging = false
                 }
         )
         .onScrollGesture { scrollDelta in

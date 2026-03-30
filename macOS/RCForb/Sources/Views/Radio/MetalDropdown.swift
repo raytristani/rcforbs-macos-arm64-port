@@ -16,17 +16,12 @@ struct MetalDropdown: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
             .frame(height: 22)
-            .background(
-                LinearGradient(
-                    colors: [Color.chassisGradientFrom, Color.chassisGradientTo],
-                    startPoint: .top, endPoint: .bottom
-                )
-            )
+            .background(Color.chassisGradientTo)
             .overlay(
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.btnBorder, lineWidth: 1)
             )
-            .cornerRadius(3)
+            .cornerRadius(8)
             .contentShape(Rectangle())
             .onTapGesture {
                 showMenu()

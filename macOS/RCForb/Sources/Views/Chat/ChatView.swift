@@ -13,9 +13,7 @@ struct ChatView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(
-                    LinearGradient(colors: [Color.chassisGradientFrom, Color.chassisGradientTo], startPoint: .top, endPoint: .bottom)
-                )
+                .background(Color.chassisGradientTo)
                 .overlay(Rectangle().frame(height: 1).foregroundColor(Color.btnBorder), alignment: .bottom)
 
             // Messages
@@ -26,7 +24,7 @@ struct ChatView: View {
                             if msg.isSystem {
                                 Text(msg.text)
                                     .font(.system(size: 12))
-                                    .foregroundColor(Color(hex: "#888666"))
+                                    .foregroundColor(.mutedForeground)
                                     .italic()
                             } else {
                                 HStack(alignment: .top, spacing: 4) {
@@ -43,7 +41,7 @@ struct ChatView: View {
                         if cm.chatMessages.isEmpty {
                             Text("No messages yet")
                                 .font(.system(size: 12))
-                                .foregroundColor(Color(hex: "#666666"))
+                                .foregroundColor(.mutedForeground.opacity(0.6))
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 20)
                         }
@@ -62,11 +60,9 @@ struct ChatView: View {
                 StyledTextField(placeholder: "Type a message...", text: $input, onSubmit: handleSend)
                     .frame(height: 24)
                     .padding(.horizontal, 8)
-                    .background(
-                        LinearGradient(colors: [Color(hex: "#555444"), Color(hex: "#444333")], startPoint: .top, endPoint: .bottom)
-                    )
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.btnBorder, lineWidth: 1))
-                    .cornerRadius(4)
+                    .background(Color.inputBg)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.btnBorder, lineWidth: 1))
+                    .cornerRadius(8)
 
                 Button("Send") { handleSend() }
                     .buttonStyle(.plain)
@@ -74,14 +70,12 @@ struct ChatView: View {
                     .foregroundColor(Color.cream)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
-                    .background(
-                        LinearGradient(colors: [Color.chassisGradientFrom, Color.chassisGradientTo], startPoint: .top, endPoint: .bottom)
-                    )
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.btnBorder, lineWidth: 1))
-                    .cornerRadius(4)
+                    .background(Color.chassisGradientTo)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.btnBorder, lineWidth: 1))
+                    .cornerRadius(8)
             }
             .padding(8)
-            .overlay(Rectangle().frame(height: 1).foregroundColor(Color(hex: "#555444")), alignment: .top)
+            .overlay(Rectangle().frame(height: 1).foregroundColor(Color.border), alignment: .top)
         }
     }
 

@@ -15,6 +15,7 @@ class ConnectionManager: ObservableObject {
     @Published var ampStateData: AmpStateData?
     @Published var switchStateData: SwitchStateData?
     @Published var connectedStationName: String = ""
+    @Published var connectedStation: RemoteStation? = nil
 
     /// User-overridden slider values. Once a user drags a slider, the value is
     /// stored here and server updates for that slider are ignored until Reset.
@@ -70,6 +71,7 @@ class ConnectionManager: ObservableObject {
     func connectToStation(_ station: RemoteStation) async {
         connectionState = .connecting
         connectedStationName = station.serverName
+        connectedStation = station
         commandCount = 0
 
         let host = station.host
@@ -96,12 +98,16 @@ class ConnectionManager: ObservableObject {
             audioBridge.onEncodedAudio = { [weak self] data in self?.tcpClient?.sendAudio(data) }
         }
 
+        // Match C# client connection sequence:
+        // 1. login command on cmd socket
+        // 2. session login on audio socket
+        // 3. set protocol and request state
+        sendCommand("get id")
+        let loginCmd = CommandParser.loginCmd(username, passwordMD5)
+        sendCommand(loginCmd)
         if let tcp = tcpClient {
             tcp.sendSessionLogin(username, passwordMD5)
         }
-
-        let loginCmd = CommandParser.loginCmd(username, passwordMD5)
-        sendCommand(loginCmd)
         sendCommand(CommandParser.setProtocolRCS())
         sendCommand(CommandParser.requestRadioState())
 
@@ -184,6 +190,7 @@ class ConnectionManager: ObservableObject {
         rotatorStateData = nil; ampStateData = nil; switchStateData = nil
         chatMessages = []
         connectedStationName = ""
+        connectedStation = nil
         connectionState = .authenticated
     }
 
@@ -204,12 +211,18 @@ class ConnectionManager: ObservableObject {
     }
 
     func sendPTT(_ on: Bool) {
+        let txButton = getTXButton()
         // Key the radio's TX button (TXd or TX, whichever exists)
-        if let txButton = getTXButton() {
+        if let txButton {
             sendCommand(CommandParser.setButton(txButton, on ? "1" : "0"))
         }
-        tcpClient?.sendPTT(on)
-        udpClient?.sendPTT(on)
+        // Send PTT control bytes on background thread (matches Android Dispatchers.IO)
+        let tcp = tcpClient
+        let udp = udpClient
+        DispatchQueue.global(qos: .userInitiated).async {
+            tcp?.sendPTT(on)
+            udp?.sendPTT(on)
+        }
         if on {
             audioBridge.startTX()
         } else {
@@ -220,8 +233,8 @@ class ConnectionManager: ObservableObject {
     /// Find the TX button name from the radio's button list, matching C# GetTXButton()
     private func getTXButton() -> String? {
         let buttons = radioState.buttonOrder
-        if buttons.contains("TXd") { return "TXd" }
         if buttons.contains("TX") { return "TX" }
+        if buttons.contains("TXd") { return "TXd" }
         return nil
     }
 
@@ -276,10 +289,12 @@ class ConnectionManager: ObservableObject {
             var data = radioState.toData()
             data.txEnabled = true
             radioStateData = data
+            audioBridge.startTX()
         case ControlByte.PTT_OFF:
             var data = radioState.toData()
             data.txEnabled = false
             radioStateData = data
+            audioBridge.stopTX()
         default: break
         }
     }

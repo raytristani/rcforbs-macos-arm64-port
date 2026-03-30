@@ -5,7 +5,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#1a1a1a").ignoresSafeArea()
+            Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Error banner
@@ -13,18 +13,18 @@ struct ContentView: View {
                     HStack {
                         Text(error)
                             .font(.system(size: 13))
-                            .foregroundColor(Color(hex: "#fca5a5"))
+                            .foregroundColor(Color.errorText)
                         Spacer()
                         Button("Dismiss") {
                             connectionManager.errorMessage = nil
                         }
                         .font(.system(size: 13))
-                        .foregroundColor(Color(hex: "#f87171"))
+                        .foregroundColor(Color.errorDismiss)
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color(hex: "#7f1d1d").opacity(0.8))
+                    .background(Color.errorBg)
                 }
 
                 // Main content based on connection state
