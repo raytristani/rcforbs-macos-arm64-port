@@ -26,10 +26,12 @@ struct RadioSlider: View {
     }
 
     var body: some View {
-        Slider(value: $localValue, in: min...max, step: step) { editing in
+        Slider(value: $localValue, in: min...max) { editing in
             isDragging = editing
             if !editing {
-                // Drag ended — lock in the user's choice
+                // Snap to step and lock in the user's choice
+                let snapped = (localValue / step).rounded() * step
+                localValue = clamp(snapped)
                 cm.sliderOverrides[name] = localValue
                 onChange(localValue)
             }

@@ -10,22 +10,16 @@ struct StatusPillsView: View {
                 let isOn = statuses[name] ?? false
                 Text(name)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(isOn ? Color(hex: "#333000") : Color.black)
-                    .opacity(isOn ? 0.8 : 0.3)
+                    .foregroundColor(isOn ? Color.textDark : Color.labelDim)
                     .padding(.horizontal, 2)
                     .padding(.vertical, 1)
                     .frame(height: 12)
-                    .background(
-                        LinearGradient(
-                            colors: isOn ? [Color.cream, Color.statusActive] : [Color.cream, Color.black],
-                            startPoint: .top, endPoint: .bottom
-                        )
-                    )
+                    .background(isOn ? Color.statusActive : Color.metalDarkTop)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 3)
+                        RoundedRectangle(cornerRadius: 6)
                             .stroke(Color.statusActive, lineWidth: 0.5)
                     )
-                    .cornerRadius(3)
+                    .cornerRadius(6)
             }
         }
     }

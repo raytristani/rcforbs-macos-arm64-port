@@ -43,39 +43,37 @@ struct FrequencyDisplay: View {
                 .foregroundColor(Color.cream)
                 .padding(8)
                 .background(Color(hex: "#2a2a22"))
-                .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color(hex: "#666654"), lineWidth: 1))
-                .cornerRadius(3)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "#666654"), lineWidth: 1))
+                .cornerRadius(8)
                 .onSubmit { submitFreq() }
 
             HStack {
                 Spacer()
                 Button("Cancel") { showDialog = false }
                     .buttonStyle(.plain)
-                    .foregroundColor(Color(hex: "#dddcbb"))
+                    .foregroundColor(Color.cream)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 4)
-                    .background(LinearGradient(colors: [Color.metalDarkTop, Color.metalDarkBottom], startPoint: .top, endPoint: .bottom))
-                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.metalDarkBorder, lineWidth: 1))
-                    .cornerRadius(3)
+                    .background(Color.metalDarkTop)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.metalDarkBorder, lineWidth: 1))
+                    .cornerRadius(8)
 
                 Button("Set") { submitFreq() }
                     .buttonStyle(.plain)
-                    .foregroundColor(Color(hex: "#333111"))
+                    .foregroundColor(Color.textDark)
                     .fontWeight(.bold)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 4)
-                    .background(LinearGradient(colors: [Color.cream, Color.creamDark], startPoint: .top, endPoint: .bottom))
-                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.cream, lineWidth: 1))
-                    .cornerRadius(3)
+                    .background(Color.creamDark)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cream, lineWidth: 1))
+                    .cornerRadius(8)
             }
         }
         .padding(20)
         .frame(minWidth: 280)
-        .background(
-            LinearGradient(colors: [Color.panelBgTop, Color.panelBgBottom], startPoint: .top, endPoint: .bottom)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(hex: "#666654"), lineWidth: 1))
-        .cornerRadius(6)
+        .background(Color.panelBgBottom)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "#666654"), lineWidth: 1))
+        .cornerRadius(10)
         .onAppear {
             freqInput = String(format: "%.6f", Double(frequency) / 1_000_000)
         }

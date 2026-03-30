@@ -14,7 +14,7 @@ struct LoginView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#2a2a2a").ignoresSafeArea()
+            Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer()
@@ -51,12 +51,12 @@ struct LoginView: View {
             if !error.isEmpty {
                 Text(error)
                     .font(.system(size: 13))
-                    .foregroundColor(Color(hex: "#fca5a5"))
+                    .foregroundColor(Color.errorText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
-                    .background(Color(hex: "#7f1d1d").opacity(0.6))
-                    .cornerRadius(4)
+                    .background(Color.errorBg)
+                    .cornerRadius(10)
                     .padding(.bottom, 16)
             }
 
@@ -74,14 +74,12 @@ struct LoginView: View {
                     StyledTextField(placeholder: "Your RemoteHams.com username", text: $user, onSubmit: handleLogin)
                         .frame(height: 30)
                         .padding(.horizontal, 12)
-                        .background(
-                            LinearGradient(colors: [Color(hex: "#666555"), Color(hex: "#555444")], startPoint: .top, endPoint: .bottom)
-                        )
+                        .background(Color.inputBg)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 4)
+                            RoundedRectangle(cornerRadius: 8)
                                 .stroke(Color.btnBorder, lineWidth: 1)
                         )
-                        .cornerRadius(4)
+                        .cornerRadius(8)
                 }
 
                 // Password
@@ -92,14 +90,12 @@ struct LoginView: View {
                     StyledTextField(placeholder: "Password", text: $password, isSecure: true, onSubmit: handleLogin)
                         .frame(height: 30)
                         .padding(.horizontal, 12)
-                        .background(
-                            LinearGradient(colors: [Color(hex: "#666555"), Color(hex: "#555444")], startPoint: .top, endPoint: .bottom)
-                        )
+                        .background(Color.inputBg)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 4)
+                            RoundedRectangle(cornerRadius: 8)
                                 .stroke(Color.btnBorder, lineWidth: 1)
                         )
-                        .cornerRadius(4)
+                        .cornerRadius(8)
                 }
 
                 // Remember me
@@ -116,16 +112,12 @@ struct LoginView: View {
                     .foregroundColor(Color.textDark)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(
-                        loading
-                        ? AnyView(Color(hex: "#555444"))
-                        : AnyView(LinearGradient(colors: [Color.cream, Color.creamDark], startPoint: .top, endPoint: .bottom))
-                    )
+                    .background(loading ? Color.inputBg : Color.creamDark)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.cream, lineWidth: 2)
                     )
-                    .cornerRadius(4)
+                    .cornerRadius(8)
                     .contentShape(Rectangle())
                     .onTapGesture { handleLogin() }
                     .opacity(loading || user.isEmpty || password.isEmpty ? 0.5 : 1.0)
@@ -133,14 +125,12 @@ struct LoginView: View {
         }
         .padding(32)
         .frame(width: 384)
-        .background(
-            LinearGradient(colors: [Color(hex: "#888666"), Color(hex: "#555444")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        )
+        .background(Color.chassisGradientTo)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.btnBorder, lineWidth: 2)
         )
-        .cornerRadius(8)
+        .cornerRadius(10)
         .shadow(color: .black.opacity(0.5), radius: 20)
     }
 
@@ -151,17 +141,15 @@ struct LoginView: View {
             Text(biometricType == .faceID ? "Sign in with Face ID" : "Sign in with Touch ID")
                 .font(.system(size: 13, weight: .semibold))
         }
-        .foregroundColor(Color.cream)
+        .foregroundColor(Color.textDark)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(
-            LinearGradient(colors: [Color(hex: "#445566"), Color(hex: "#334455")], startPoint: .top, endPoint: .bottom)
-        )
+        .background(Color.creamDark)
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(Color(hex: "#667788"), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.cream, lineWidth: 1)
         )
-        .cornerRadius(6)
+        .cornerRadius(8)
         .contentShape(Rectangle())
         .onTapGesture { authenticateWithBiometrics() }
     }

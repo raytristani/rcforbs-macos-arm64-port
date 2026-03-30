@@ -10,7 +10,7 @@ enum CodecType {
 /// Uses separate AVAudioEngines for playback and mic to avoid disrupting RX during TX.
 class AudioBridge {
     private var codecType: CodecType = .opus
-    private var isActive = false
+    private(set) var isActive = false
     private var rxPacketCount = 0
 
     // Audio engine for playback (never stopped during TX)
@@ -31,7 +31,7 @@ class AudioBridge {
     private var speexEncoder: SpeexEncoder?
 
     // TX state
-    private var isTXActive = false
+    private(set) var isTXActive = false
     private var txPcmBuffer = Data()
     /// Frame size in samples for the active TX codec
     private var txFrameSize: Int { codecType == .speex ? 160 : 960 }
@@ -229,19 +229,36 @@ class AudioBridge {
             try mic.start()
         } catch {
             print("[AudioBridge] Failed to start mic engine: \(error)")
+            isTXActive = false
         }
     }
 
-    func stopTX() {
-        guard isTXActive else { return }
-        isTXActive = false
+    /// Clean up mic engine without touching playback engine
+    private func cleanupMicEngine() {
         micEngine?.inputNode.removeTap(onBus: 0)
         micEngine?.stop()
         micEngine = nil
         txConverter = nil
         txPcmBuffer = Data()
+    }
 
-        // Restore RX volume
+    func stopTX() {
+        guard isTXActive else { return }
+        isTXActive = false
+        cleanupMicEngine()
+
+        // Rebuild playback engine to guarantee clean state (matches Android)
+        audioQueue.sync {
+            batchTimer?.cancel()
+            batchTimer = nil
+            pendingPcm = []
+            pendingBytes = 0
+        }
+        playerNode?.stop()
+        audioEngine?.stop()
+        audioEngine = nil
+        playerNode = nil
+        setupAudioEngine()
         audioEngine?.mainMixerNode.outputVolume = savedVolume
     }
 
@@ -260,6 +277,135 @@ class AudioBridge {
 
             if let encoded, let callback = onEncodedAudio {
                 callback(encoded)
+            }
+        }
+    }
+
+    func micTest(onComplete: @escaping (Bool) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let testRate: Double = 8000
+                let testFrame = 160
+                let testSeconds = 2
+                let totalSamples = Int(testRate) * testSeconds
+
+                // --- Record using a standalone engine ---
+                let recEngine = AVAudioEngine()
+                let inputNode = recEngine.inputNode
+                let inputFormat = inputNode.outputFormat(forBus: 0)
+                let targetFormat = AVAudioFormat(standardFormatWithSampleRate: testRate, channels: 1)!
+                let converter = AVAudioConverter(from: inputFormat, to: targetFormat)
+
+                var capturedPcm = Data()
+                let captureGroup = DispatchGroup()
+                captureGroup.enter()
+                var didLeave = false
+
+                inputNode.installTap(onBus: 0, bufferSize: 480, format: inputFormat) { buffer, _ in
+                    guard !didLeave else { return }
+
+                    let convertedBuffer: AVAudioPCMBuffer?
+                    if let converter {
+                        let ratio = testRate / inputFormat.sampleRate
+                        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1
+                        guard let output = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { return }
+                        var isDone = false
+                        converter.convert(to: output, error: nil) { _, outStatus in
+                            if isDone { outStatus.pointee = .noDataNow; return nil }
+                            isDone = true
+                            outStatus.pointee = .haveData
+                            return buffer
+                        }
+                        convertedBuffer = output
+                    } else {
+                        convertedBuffer = buffer
+                    }
+
+                    guard let convertedBuffer, convertedBuffer.frameLength > 0,
+                          let floatData = convertedBuffer.floatChannelData?[0] else { return }
+
+                    let len = Int(convertedBuffer.frameLength)
+                    var int16 = Data(count: len * 2)
+                    int16.withUnsafeMutableBytes { raw in
+                        let ptr = raw.bindMemory(to: Int16.self)
+                        for i in 0..<len { ptr[i] = Int16(clamping: Int(floatData[i] * 32767.0)) }
+                    }
+                    capturedPcm.append(int16)
+
+                    if capturedPcm.count / 2 >= totalSamples {
+                        didLeave = true
+                        captureGroup.leave()
+                    }
+                }
+
+                try recEngine.start()
+                _ = captureGroup.wait(timeout: .now() + .seconds(4))
+                inputNode.removeTap(onBus: 0)
+                recEngine.stop()
+
+                // Split into frames
+                let bytesPerFrame = testFrame * 2
+                var recorded = [Data]()
+                var offset = 0
+                while offset + bytesPerFrame <= capturedPcm.count {
+                    recorded.append(capturedPcm[offset..<(offset + bytesPerFrame)])
+                    offset += bytesPerFrame
+                }
+
+                // Check max sample
+                var maxSample: Int16 = 0
+                capturedPcm.withUnsafeBytes { raw in
+                    let samples = raw.bindMemory(to: Int16.self)
+                    for i in 0..<samples.count {
+                        let v = abs(samples[i])
+                        if v > maxSample { maxSample = v }
+                    }
+                }
+                print("[AudioBridge] Mic test: recorded \(recorded.count) frames, maxSample=\(maxSample)")
+
+                // Encode/decode round-trip through Speex
+                let enc = SpeexEncoder()
+                let dec = SpeexDecoder()
+                var decoded = [Data]()
+                for chunk in recorded {
+                    if let encoded = enc.encode(chunk), let decodedChunk = dec.decode(encoded) {
+                        decoded.append(decodedChunk)
+                    }
+                }
+                print("[AudioBridge] Mic test: encoded/decoded \(decoded.count) frames")
+
+                // --- Play back using a standalone engine at 8kHz ---
+                let playFormat = AVAudioFormat(standardFormatWithSampleRate: testRate, channels: 1)!
+                let playEngine = AVAudioEngine()
+                let playNode = AVAudioPlayerNode()
+                playEngine.attach(playNode)
+                playEngine.connect(playNode, to: playEngine.mainMixerNode, format: playFormat)
+                try playEngine.start()
+                playNode.play()
+
+                for chunk in decoded {
+                    let sampleCount = chunk.count / 2
+                    guard let buffer = AVAudioPCMBuffer(pcmFormat: playFormat, frameCapacity: AVAudioFrameCount(sampleCount)) else { continue }
+                    buffer.frameLength = AVAudioFrameCount(sampleCount)
+                    let floatData = buffer.floatChannelData![0]
+                    chunk.withUnsafeBytes { raw in
+                        let int16Ptr = raw.bindMemory(to: Int16.self)
+                        for i in 0..<sampleCount { floatData[i] = Float(int16Ptr[i]) / 32768.0 }
+                    }
+                    playNode.scheduleBuffer(buffer, completionHandler: nil)
+                }
+
+                // Wait for playback to drain
+                Thread.sleep(forTimeInterval: 2.5)
+                playNode.stop()
+                playEngine.stop()
+
+                let success = maxSample > 100
+                print("[AudioBridge] Mic test complete: maxSample=\(maxSample), success=\(success)")
+                DispatchQueue.main.async { onComplete(success) }
+            } catch {
+                print("[AudioBridge] Mic test failed: \(error)")
+                DispatchQueue.main.async { onComplete(false) }
             }
         }
     }

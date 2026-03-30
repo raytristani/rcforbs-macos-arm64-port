@@ -28,24 +28,24 @@ struct MetalButton: View {
         .buttonStyle(.plain)
         .background(background)
         .overlay(
-            RoundedRectangle(cornerRadius: 3)
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(borderColor, lineWidth: 1)
         )
-        .cornerRadius(3)
+        .cornerRadius(8)
     }
 
     private var background: some View {
         Group {
             if isOn || style == .light {
-                LinearGradient(colors: [Color.metalLightTop, Color.metalLightBottom], startPoint: .top, endPoint: .bottom)
+                Color.metalLightBottom
             } else {
-                LinearGradient(colors: [Color.metalDarkTop, Color.metalDarkBottom], startPoint: .top, endPoint: .bottom)
+                Color.metalDarkTop
             }
         }
     }
 
     private var foreground: Color {
-        (isOn || style == .light) ? Color(hex: "#333111") : Color(hex: "#dddcbb")
+        (isOn || style == .light) ? Color.textDark : Color.cream
     }
 
     private var borderColor: Color {

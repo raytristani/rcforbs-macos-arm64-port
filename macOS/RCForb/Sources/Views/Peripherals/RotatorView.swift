@@ -47,9 +47,9 @@ struct RotatorView: View {
                                 .frame(width: 64)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(LinearGradient(colors: [Color(hex: "#555444"), Color(hex: "#444333")], startPoint: .top, endPoint: .bottom))
-                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.btnBorder, lineWidth: 1))
-                                .cornerRadius(4)
+                                .background(Color.inputBg)
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.btnBorder, lineWidth: 1))
+                                .cornerRadius(8)
                                 .onSubmit { handleGo() }
 
                             MetalButton(title: "Go", isOn: false, style: .dark) {
@@ -66,7 +66,7 @@ struct RotatorView: View {
     private func compassDial(bearing: Int) -> some View {
         ZStack {
             Circle()
-                .fill(LinearGradient(colors: [Color(hex: "#555444"), Color(hex: "#444333")], startPoint: .top, endPoint: .bottom))
+                .fill(Color.inputBg)
                 .frame(width: 120, height: 120)
                 .overlay(Circle().stroke(Color.btnBorder, lineWidth: 2))
 
@@ -82,7 +82,7 @@ struct RotatorView: View {
 
             // Needle
             Rectangle()
-                .fill(Color(hex: "#cc4444"))
+                .fill(Color.ledRed)
                 .frame(width: 2, height: 45)
                 .offset(y: -22.5)
                 .rotationEffect(.degrees(Double(bearing)))
