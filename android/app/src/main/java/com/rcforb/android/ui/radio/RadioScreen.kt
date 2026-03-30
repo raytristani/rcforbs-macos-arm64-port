@@ -280,7 +280,8 @@ fun RadioScreen(vm: ConnectionManagerViewModel) {
                         CompactMessagesPanel(radio)
                     }
 
-                    // Request Tune + PTT
+                    // Request Tune + Mic Test + PTT
+                    var micTestResult by remember { mutableStateOf<String?>(null) }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -307,6 +308,32 @@ fun RadioScreen(vm: ConnectionManagerViewModel) {
                                     Text("(Again)", color = AppColors.MutedForeground, fontSize = AppColors.sp9, lineHeight = AppColors.sp9)
                                 }
                             }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .width(90.dp)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (micTestResult == null) AppColors.MetalDarkTop else if (micTestResult == "OK") AppColors.LedGreen.copy(alpha = 0.3f) else AppColors.LedRed.copy(alpha = 0.3f))
+                                .border(1.dp, AppColors.MetalDarkBorder, RoundedCornerShape(10.dp))
+                                .noRippleClickable {
+                                    if (!hasMicPermission) {
+                                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        return@noRippleClickable
+                                    }
+                                    micTestResult = "..."
+                                    vm.audioBridge.micTest { success ->
+                                        micTestResult = if (success) "OK" else "FAIL"
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (micTestResult == "...") "Testing..." else if (micTestResult != null) "Mic: $micTestResult" else "Mic Test",
+                                color = AppColors.Cream,
+                                fontSize = AppColors.sp10,
+                                lineHeight = AppColors.sp10
+                            )
                         }
                         PTTButton(isPTT, modifier = Modifier.weight(1f)) { on ->
                             if (on && !hasMicPermission) {

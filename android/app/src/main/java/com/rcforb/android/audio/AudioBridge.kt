@@ -38,6 +38,7 @@ class AudioBridge {
     private val batchFrames = 4
     private val audioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var batchJob: Job? = null
+    private var rxSpeexFrameCount = 2 // frames per RX packet, detected dynamically
 
     var onEncodedAudio: ((ByteArray) -> Unit)? = null
 
@@ -104,7 +105,11 @@ class AudioBridge {
         if (pcm.isEmpty()) return
 
         rxPacketCount++
-        if (rxPacketCount <= 3) {
+        if (rxPacketCount == 1 && codecType == CodecType.SPEEX) {
+            // Detect frames per packet from first RX: pcm bytes / (160 samples * 2 bytes)
+            rxSpeexFrameCount = (pcm.size / 320).coerceAtLeast(1)
+            Log.i("AudioBridge", "RX packet #1: ${data.size} encoded -> ${pcm.size} PCM bytes = $rxSpeexFrameCount frames/packet")
+        } else if (rxPacketCount <= 3) {
             Log.i("AudioBridge", "RX packet #$rxPacketCount: ${data.size} encoded -> ${pcm.size} PCM bytes")
         }
 
@@ -157,16 +162,18 @@ class AudioBridge {
         audioTrack?.setVolume(0.05f)
 
         // Speex uses 8kHz mic, Opus uses 48kHz
+        // Match TX frame count to server's RX frame count for compatibility
         val txSampleRate = if (codecType == CodecType.SPEEX) 8000 else sampleRate
-        val txFrame = if (codecType == CodecType.SPEEX) 160 else txFrameSize
-
-        val bufSize = AudioRecord.getMinBufferSize(
-            txSampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
+        val txFrame = if (codecType == CodecType.SPEEX) 160 * rxSpeexFrameCount else txFrameSize
+        Log.i("AudioBridge", "TX config: rate=$txSampleRate, samplesPerPacket=$txFrame ($rxSpeexFrameCount frames)")
 
         try {
+            try { audioRecord?.release() } catch (_: Exception) {}
+            val bufSize = AudioRecord.getMinBufferSize(
+                txSampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
                 txSampleRate,
@@ -174,12 +181,18 @@ class AudioBridge {
                 AudioFormat.ENCODING_PCM_16BIT,
                 bufSize.coerceAtLeast(txFrame * 2 * 4)
             )
+            Log.i("AudioBridge", "AudioRecord created: state=${audioRecord?.state}, rate=$txSampleRate, frame=$txFrame")
             audioRecord?.startRecording()
 
             txJob = audioScope.launch {
                 val buffer = ByteArray(txFrame * 2) // Int16 = 2 bytes per sample
+                var readCount = 0
                 while (isTXActive) {
                     val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
+                    readCount++
+                    if (readCount <= 3) {
+                        Log.i("AudioBridge", "TX read #$readCount: $read bytes (expected ${buffer.size}), recordState=${audioRecord?.recordingState}")
+                    }
                     if (read == buffer.size) {
                         val encoded = if (codecType == CodecType.OPUS) {
                             opusEncoder?.encode(buffer)
@@ -187,10 +200,10 @@ class AudioBridge {
                             speexEncoder?.encode(buffer)
                         }
                         if (encoded != null) {
-                            Log.d("AudioBridge", "TX: encoded ${encoded.size} bytes, callback=${onEncodedAudio != null}")
+                            if (readCount <= 3) {
+                                Log.i("AudioBridge", "TX frame #$readCount: ${encoded.size} bytes, first10=[${encoded.take(10).joinToString(",") { (it.toInt() and 0xFF).toString() }}]")
+                            }
                             onEncodedAudio?.invoke(encoded)
-                        } else {
-                            Log.w("AudioBridge", "TX: encoder returned null (codec=$codecType)")
                         }
                     }
                 }
@@ -249,6 +262,95 @@ class AudioBridge {
         onEncodedAudio = null
         rxPacketCount = 0
         pendingPcm.clear()
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    fun micTest(onComplete: (Boolean) -> Unit) {
+        audioScope.launch {
+            try {
+                val testRate = 8000
+                val testFrame = 160
+                val testSeconds = 2
+                val totalSamples = testRate * testSeconds
+                val recorded = mutableListOf<ByteArray>()
+
+                // Mute RX during test
+                audioTrack?.setVolume(0f)
+
+                // Record
+                val bufSize = AudioRecord.getMinBufferSize(testRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                val rec = AudioRecord(MediaRecorder.AudioSource.MIC, testRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufSize.coerceAtLeast(testFrame * 2 * 4))
+                rec.startRecording()
+                var samplesRead = 0
+                while (samplesRead < totalSamples) {
+                    val buf = ByteArray(testFrame * 2)
+                    val read = rec.read(buf, 0, buf.size)
+                    if (read > 0) {
+                        recorded.add(buf.copyOf(read))
+                        samplesRead += read / 2
+                    }
+                }
+                rec.stop()
+                rec.release()
+
+                // Check if we got actual audio (not silence)
+                var maxSample: Short = 0
+                for (chunk in recorded) {
+                    val bb = java.nio.ByteBuffer.wrap(chunk).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    while (bb.remaining() >= 2) {
+                        val s = kotlin.math.abs(bb.short.toInt()).toShort()
+                        if (s > maxSample) maxSample = s
+                    }
+                }
+                Log.i("AudioBridge", "Mic test: recorded ${recorded.size} frames, maxSample=$maxSample")
+
+                // Encode and decode round-trip
+                val encoder = SpeexEncoder()
+                val decoder = SpeexDecoder()
+                val decoded = mutableListOf<ByteArray>()
+                for (chunk in recorded) {
+                    if (chunk.size == testFrame * 2) {
+                        val enc = encoder.encode(chunk)
+                        if (enc != null) {
+                            val dec = decoder.decode(enc)
+                            if (dec != null) decoded.add(dec)
+                        }
+                    }
+                }
+                encoder.release()
+                decoder.release()
+                Log.i("AudioBridge", "Mic test: encoded/decoded ${decoded.size} frames")
+
+                // Play back through AudioTrack at 8kHz (no upsample needed)
+                val playBuf = AudioTrack.getMinBufferSize(8000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                val player = AudioTrack.Builder()
+                    .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+                    .setAudioFormat(AudioFormat.Builder().setSampleRate(8000).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                    .setBufferSizeInBytes(playBuf * 4)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
+                player.play()
+                for (chunk in decoded) {
+                    player.write(chunk, 0, chunk.size)
+                }
+                Thread.sleep(2500) // let buffer drain fully
+                player.stop()
+                player.release()
+
+                // Restore RX volume
+                audioTrack?.setVolume(currentVolume)
+
+                Log.i("AudioBridge", "Mic test complete: maxSample=$maxSample, success=${maxSample > 100}")
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(maxSample > 100)
+                }
+            } catch (e: Exception) {
+                Log.e("AudioBridge", "Mic test failed: ${e.message}")
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(false)
+                }
+            }
+        }
     }
 
     companion object {

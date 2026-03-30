@@ -134,9 +134,16 @@ class ConnectionManagerViewModel : ViewModel() {
                 audioBridge.onEncodedAudio = { data -> tcpClient?.sendAudio(data) }
             }
 
-            tcpClient?.sendSessionLogin(username, passwordMD5)
-
+            // Match C# client connection sequence exactly:
+            // 1. "get id" (C# sends this immediately after connect)
+            // 2. login command on cmd socket
+            // 3. session login on audio socket (C# does this inside SendCommandString)
+            // 4. set protocol and request state
+            sendCommand("get id")
             sendCommand(CommandParser.loginCmd(username, passwordMD5))
+            withContext(Dispatchers.IO) {
+                tcpClient?.sendSessionLogin(username, passwordMD5)
+            }
             sendCommand(CommandParser.setProtocolRCS())
             sendCommand(CommandParser.requestRadioState())
 
@@ -246,8 +253,8 @@ class ConnectionManagerViewModel : ViewModel() {
 
     private fun getTXButton(): String? {
         val buttons = _radioStateData.value?.buttons ?: return null
-        if ("TXd" in buttons) return "TXd"
         if ("TX" in buttons) return "TX"
+        if ("TXd" in buttons) return "TXd"
         return null
     }
 
@@ -284,7 +291,7 @@ class ConnectionManagerViewModel : ViewModel() {
 
     private fun dispatchCommand(command: String) {
         commandCount++
-        if (commandCount <= 30) {
+        if (commandCount <= 30 || command.contains("button::TX")) {
             val preview = command.take(120)
             Log.d("Dispatch", "#$commandCount: $preview")
         }
